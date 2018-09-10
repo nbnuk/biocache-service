@@ -28,6 +28,14 @@ import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.response.FacetField;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
+import org.geotools.geometry.GeneralDirectPosition;
+import org.geotools.referencing.CRS;
+import org.geotools.referencing.operation.DefaultCoordinateOperationFactory;
+import org.opengis.geometry.DirectPosition;
+import org.opengis.referencing.crs.CRSAuthorityFactory;
+import org.opengis.referencing.crs.CoordinateReferenceSystem;
+import org.opengis.referencing.operation.CoordinateOperation;
+import org.opengis.referencing.operation.TransformException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.ehcache.EhCacheManagerFactoryBean;
 import org.springframework.stereotype.Controller;
@@ -203,6 +211,7 @@ public class WMSController extends AbstractSecureController{
     protected WMSOSGridController wmsosGridController;
 
     static {
+        // cache blank image bytes
         byte[] b = null;
         try (RandomAccessFile raf = new RandomAccessFile(WMSController.class.getResource("/blank.png").getFile(), "r");) {
             b = new byte[(int) raf.length()];
@@ -211,6 +220,9 @@ public class WMSController extends AbstractSecureController{
             logger.error("Unable to open blank image file", e);
         }
         blankImageBytes = b;
+
+        // configure geotools to use x/y order for SRS operations
+        System.setProperty("org.geotools.referencing.forceXY", "true");
     }
 
     @Inject
@@ -649,30 +661,13 @@ public class WMSController extends AbstractSecureController{
         }
     }
 
-    /**
-     * 4326 to 900913 pixel and m conversion
-     */
-    private int map_offset = 268435456; // half the Earth's circumference at zoom level 21
-    private double map_radius = map_offset / Math.PI;
-
-    int convertLatToPixel(double lat) {
-        return (int) Math.round(map_offset - map_radius
-                * Math.log((1 + Math.sin(lat * Math.PI / 180))
-                / (1 - Math.sin(lat * Math.PI / 180))) / 2);
-    }
-
-    int convertLatToPixel4326(double lat, double top, double bottom, int pixelHeight) {
+    int scaleLatitudeForImage(double lat, double top, double bottom, int pixelHeight) {
         return (int) (((lat - top) / (bottom - top)) * pixelHeight);
     }
 
-    int convertLngToPixel4326(double lng, double left, double right, int pixelWidth) {
+    int scaleLongitudeForImage(double lng, double left, double right, int pixelWidth) {
         return (int) (((lng - left) / (right - left)) * pixelWidth);
     }
-
-    int convertLngToPixel(double lng) {
-        return (int) Math.round(map_offset + map_radius * lng * Math.PI / 180);
-    }
-
     double convertMetersToLng(double meters) {
         return meters / 20037508.342789244 * 180;
     }
@@ -728,144 +723,71 @@ public class WMSController extends AbstractSecureController{
     }
 
     /**
-     * @param bboxString
-     * @param width
-     * @param height
-     * @param size
-     * @param uncertainty
-     * @param mbbox       the mbbox to initialise
-     * @param bbox        the bbox to initialise
-     * @param pbbox       the pbbox to initialise
-     * @param tilebbox    the tilebbox to initialise
-     * @return
+     *
+     * @param transformTo4326 TransformOp to convert from the target SRS to the coordinates in SOLR (EPSG:4326)
+     * @param bboxString getMap bbox parameter with the tile extents in the target SRS as min x, min y, max x, max y
+     * @param width getMap width value in pixels
+     * @param height getMap height value in pixels
+     * @param size dot radius in pixels used to calculate a larger bounding box for the request to SOLR for coordinates
+     * @param uncertainty boolean to trigger a larger bounding box for the request to SOLR for coordinates (??)
+     * @param mbbox bounding box in metres (spherical mercator). Includes pixel correction buffer.
+     * @param bbox bounding box for the SOLR request. This is the bboxString transformed to EPSG:4326 with buffer of
+     *            dot size + max uncertainty radius + pixel correction
+     * @param pbbox bounding box in the target SRS corresponding to the output pixel positions. Includes pixel correction buffer.
+     * @param tilebbox raw coordinates from the getMap bbox parameter
+     * @return degrees per pixel to determine which SOLR coordinate field to facet upon
      */
-    private double getBBoxes(String bboxString, int width, int height, int size, boolean uncertainty, double[] mbbox, double[] bbox, double[] pbbox, double[] tilebbox) {
+    private double getBBoxesSRS(CoordinateOperation transformTo4326, String bboxString, int width, int height, int size, boolean uncertainty, double[] mbbox, double[] bbox, double[] pbbox, double[] tilebbox) throws TransformException {
         String[] splitBBox = bboxString.split(",");
         for (int i = 0; i < 4; i++) {
-            boolean errorInThisPosition = false;
             try {
-                if(splitBBox.length > i) {
-                    tilebbox[i] = Double.parseDouble(splitBBox[i]);
-                    mbbox[i] = tilebbox[i];
-                } else {
-                    logger.error("Problem parsing BBOX: '" + bboxString + "' at position " + i);
-                    errorInThisPosition = true;
-                }
+                tilebbox[i] = Double.parseDouble(splitBBox[i]);
+                mbbox[i] = tilebbox[i];
             } catch (Exception e) {
                 logger.error("Problem parsing BBOX: '" + bboxString + "' at position " + i, e);
-                errorInThisPosition = true;
-            }
-            if (errorInThisPosition) {
                 tilebbox[i] = 0.0d;
                 mbbox[i] = 0.0d;
             }
         }
 
-        //adjust bbox extents with half pixel width/height
-        double pixelWidth = (mbbox[2] - mbbox[0]) / width;
-        double pixelHeight = (mbbox[3] - mbbox[1]) / height;
-        mbbox[0] += pixelWidth / 2;
-        mbbox[2] -= pixelWidth / 2;
-        mbbox[1] += pixelHeight / 2;
-        mbbox[3] -= pixelHeight / 2;
+        // pixel correction buffer: adjust bbox extents with half pixel width/height
+        double pixelWidthInTargetSRS = (mbbox[2] - mbbox[0]) / (double) width;
+        double pixelHeightInTargetSRS = (mbbox[3] - mbbox[1]) / (double) height;
+        mbbox[0] += pixelWidthInTargetSRS / 2.0;
+        mbbox[2] -= pixelWidthInTargetSRS / 2.0;
+        mbbox[1] += pixelHeightInTargetSRS / 2.0;
+        mbbox[3] -= pixelHeightInTargetSRS / 2.0;
+
+        // when an SRS is not aligned with EPSG:4326 the dot size may be too small.
+        double srsOffset = 10;
 
         //offset for points bounding box by dot size
-        double xoffset = (mbbox[2] - mbbox[0]) / (double) width * size;
-        double yoffset = (mbbox[3] - mbbox[1]) / (double) height * size;
+        double xoffset = pixelWidthInTargetSRS * (size + 1) * srsOffset;
+        double yoffset = pixelHeightInTargetSRS * (size + 1) * srsOffset;
 
-        //adjust offset for pixel height/width
-        xoffset += pixelWidth;
-        yoffset += pixelHeight;
+        pbbox[0] = mbbox[0];
+        pbbox[1] = mbbox[1];
+        pbbox[2] = mbbox[2];
+        pbbox[3] = mbbox[3];
 
-        pbbox[0] = convertLngToPixel(convertMetersToLng(mbbox[0]));
-        pbbox[1] = convertLatToPixel(convertMetersToLat(mbbox[1]));
-        pbbox[2] = convertLngToPixel(convertMetersToLng(mbbox[2]));
-        pbbox[3] = convertLatToPixel(convertMetersToLat(mbbox[3]));
+        GeneralDirectPosition directPositionSW = new GeneralDirectPosition(mbbox[0] - xoffset, mbbox[1] - yoffset);
+        GeneralDirectPosition directPositionNE = new GeneralDirectPosition(mbbox[2] + xoffset, mbbox[3] + yoffset);
+        GeneralDirectPosition directPositionSE = new GeneralDirectPosition(mbbox[2] - xoffset, mbbox[1] - yoffset);
+        GeneralDirectPosition directPositionNW = new GeneralDirectPosition(mbbox[0] + xoffset, mbbox[3] + yoffset);
+        DirectPosition sw4326 = transformTo4326.getMathTransform().transform(directPositionSW, null);
+        DirectPosition ne4326 = transformTo4326.getMathTransform().transform(directPositionNE, null);
+        DirectPosition se4326 = transformTo4326.getMathTransform().transform(directPositionSE, null);
+        DirectPosition nw4326 = transformTo4326.getMathTransform().transform(directPositionNW, null);
 
-        bbox[0] = convertMetersToLng(mbbox[0] - xoffset);
-        bbox[1] = convertMetersToLat(mbbox[1] - yoffset);
-        bbox[2] = convertMetersToLng(mbbox[2] + xoffset);
-        bbox[3] = convertMetersToLat(mbbox[3] + yoffset);
+        bbox[0] = Math.min(Math.min(Math.min(sw4326.getOrdinate(0), ne4326.getOrdinate(0)), se4326.getOrdinate(0)), nw4326.getOrdinate(0));
+        bbox[1] = Math.min(Math.min(Math.min(sw4326.getOrdinate(1), ne4326.getOrdinate(1)), se4326.getOrdinate(1)), nw4326.getOrdinate(1));
+        bbox[2] = Math.max(Math.max(Math.max(sw4326.getOrdinate(0), ne4326.getOrdinate(0)), se4326.getOrdinate(0)), nw4326.getOrdinate(0));
+        bbox[3] = Math.max(Math.max(Math.max(sw4326.getOrdinate(1), ne4326.getOrdinate(1)), se4326.getOrdinate(1)), nw4326.getOrdinate(1));
 
-        double degreesPerPixel = Math.min((convertMetersToLng(mbbox[2]) - convertMetersToLng(mbbox[0])) / (double) width,
-                (convertMetersToLng(mbbox[3]) - convertMetersToLng(mbbox[1])) / (double) height);
+        double degreesPerPixel = Math.min((bbox[2] - bbox[0]) / (double) width,
+                (bbox[3] - bbox[1]) / (double) height);
+
         return degreesPerPixel;
-    }
-
-    /**
-     * @param bboxString
-     * @param width
-     * @param height
-     * @param size
-     * @param uncertainty
-     * @param mbbox       the mbbox to initialise
-     * @param bbox        the bbox to initialise
-     * @param pbbox       the pbbox to initialise
-     * @return
-     */
-    private double getBBoxes4326(String bboxString, int width, int height, int size, boolean uncertainty, double[] mbbox, double[] bbox, double[] pbbox, double[] tilebbox) {
-        int i = 0;
-        for (String s : bboxString.split(",")) {
-            try {
-                tilebbox[i] = Double.parseDouble(s);
-                mbbox[i] = tilebbox[i];
-                i++;
-            } catch (Exception e) {
-                logger.error("Problem parsing BBOX: '" + bboxString + "'", e);
-            }
-        }
-
-        //adjust bbox extents with half pixel width/height
-        double pixelWidth = (mbbox[2] - mbbox[0]) / width;
-        double pixelHeight = (mbbox[3] - mbbox[1]) / height;
-        mbbox[0] += pixelWidth / 2;
-        mbbox[2] -= pixelWidth / 2;
-        mbbox[1] += pixelHeight / 2;
-        mbbox[3] -= pixelHeight / 2;
-
-        //offset for points bounding box by dot size
-        double xoffset = (mbbox[2] - mbbox[0]) / (double) width * size;
-        double yoffset = (mbbox[3] - mbbox[1]) / (double) height * size;
-
-        //adjust offset for pixel height/width
-        xoffset += pixelWidth;
-        yoffset += pixelHeight;
-
-        //actual bounding box
-        bbox[0] = mbbox[0] - xoffset;
-        bbox[1] = mbbox[1] - yoffset;
-        bbox[2] = mbbox[2] + xoffset;
-        bbox[3] = mbbox[3] + yoffset;
-
-        double degreesPerPixel = Math.min(pixelWidth, pixelHeight);
-        return degreesPerPixel;
-    }
-
-    private String getQ(String cql_filter) {
-        String q = cql_filter;
-        int p1 = cql_filter.indexOf("qid:");
-        if (p1 >= 0) {
-            int p2 = cql_filter.indexOf('&', p1 + 1);
-            if (p2 < 0) {
-                p2 = cql_filter.indexOf(';', p1 + 1);
-            }
-            if (p2 < 0) {
-                p2 = cql_filter.length();
-            }
-            q = cql_filter.substring(p1, p2);
-        }
-        return q;
-    }
-
-    private String convertBBox4326To900913(String bbox) {
-        int i = 0;
-        Double[] mbbox = new Double[4];
-        for (String s : bbox.split(",")) {
-            if (i % 2 == 0) mbbox[i] = convertLngToMeters(Double.parseDouble(s));
-            else mbbox[i] = convertLatToMeters(Double.parseDouble(s));
-            i++;
-        }
-        return StringUtils.join(mbbox, ",");
     }
 
     // add this to the GetCapabilities...
@@ -1008,9 +930,6 @@ public class WMSController extends AbstractSecureController{
             logger.debug("WMS - GetFeatureInfo requested for: " + queryLayers);
         }
 
-        if ("EPSG:4326".equals(srs))
-            bboxString = convertBBox4326To900913(bboxString);    // to work around a UDIG bug
-
         WmsEnv vars = new WmsEnv(env, styles);
         double[] mbbox = new double[4];
         double[] bbox = new double[4];
@@ -1018,8 +937,15 @@ public class WMSController extends AbstractSecureController{
         double[] tilebbox = new double[4];
         int size = vars.size + (vars.highlight != null ? HIGHLIGHT_RADIUS * 2 + (int) (vars.size * 0.2) : 0) + 5;  //bounding box buffer
 
-        //what is the size of the dot in degrees
-        double resolution = getBBoxes(bboxString, width, height, size, vars.uncertainty, mbbox, bbox, pbbox, tilebbox);
+        CRSAuthorityFactory factory = CRS.getAuthorityFactory(true);
+        CoordinateReferenceSystem sourceCRS = factory.createCoordinateReferenceSystem(srs);
+        CoordinateReferenceSystem targetCRS = factory.createCoordinateReferenceSystem("EPSG:4326");
+        CoordinateOperation transformTo4326 = new DefaultCoordinateOperationFactory().createOperation(sourceCRS, targetCRS);
+
+        double resolution;
+
+        // support for any srs
+        resolution = getBBoxesSRS(transformTo4326, bboxString, width, height, size, vars.uncertainty, mbbox, bbox, pbbox, tilebbox);
 
         //resolution should be a value < 1
         PointType pointType = getPointTypeForDegreesPerPixel(resolution);
@@ -1047,7 +973,6 @@ public class WMSController extends AbstractSecureController{
 
         String[] fqs = new String[]{"longitude:[" + minLng + " TO " + maxLng + "]", "latitude:[" + minLat + " TO " + maxLat + "]"};
         requestParams.setFq(fqs);
-        //requestParams.setFq(new String[]{"point-"+pointType.getValue()+":"+roundedLatitude+","+roundedLongitude});
         requestParams.setFacet(false);
 
         //TODO: paging
@@ -1231,6 +1156,12 @@ public class WMSController extends AbstractSecureController{
             //webservicesRoot
             String biocacheServerUrl = request.getSession().getServletContext().getInitParameter("webservicesRoot");
             PrintWriter writer = response.getWriter();
+
+            String supportedCodes = "";
+            for (String code : CRS.getSupportedCodes("EPSG")) {
+                supportedCodes += "      <SRS>EPSG:" + code + "</SRS>\n";
+            }
+
             writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
                     "<!DOCTYPE WMT_MS_Capabilities SYSTEM \"http://spatial.ala.org.au/geoserver/schemas/wms/1.1.1/WMS_MS_Capabilities.dtd\">\n" +
                     "<WMT_MS_Capabilities version=\"1.1.1\" updateSequence=\"28862\">\n" +
@@ -1324,9 +1255,7 @@ public class WMSController extends AbstractSecureController{
                     "    <Layer>\n" +
                     "      <Title>" + organizationName + " - Species occurrence layers</Title>\n" +
                     "      <Abstract>Custom WMS services for " + organizationName + " species occurrences</Abstract>\n" +
-                    "      <SRS>EPSG:3857</SRS>\n" +
-                    "      <SRS>EPSG:900913</SRS>\n" +
-                    "      <SRS>EPSG:4326</SRS>\n" +
+                    supportedCodes +
                     "     <LatLonBoundingBox minx=\"-179.9\" miny=\"-89.9\" maxx=\"179.9\" maxy=\"89.9\"/>\n"
             );
 
@@ -1480,7 +1409,6 @@ public class WMSController extends AbstractSecureController{
         response.setHeader("ETag", wmsETag.get());
         response.setContentType("image/png"); //only png images generated
 
-        boolean is4326 = false;
         WmsEnv vars = new WmsEnv(env, styles);
         double[] mbbox = new double[4];
         double[] bbox = new double[4];
@@ -1491,28 +1419,20 @@ public class WMSController extends AbstractSecureController{
         int steppedSize = (int) (Math.ceil(vars.size / 20.0) * 20);
         int size = steppedSize + (vars.highlight != null ? HIGHLIGHT_RADIUS * 2 + (int) (steppedSize * 0.2) : 0) + 5;  //bounding box buffer
 
-        double resolution;
-        if ("EPSG:4326".equals(srs)) {
-            is4326 = true;
-            //bboxString = convertBBox4326To900913(bboxString);    // to work around a UDIG bug
+        CRSAuthorityFactory factory = CRS.getAuthorityFactory(true);
+        CoordinateReferenceSystem sourceCRS = factory.createCoordinateReferenceSystem(srs);
+        CoordinateReferenceSystem targetCRS = factory.createCoordinateReferenceSystem("EPSG:4326");
+        CoordinateOperation transformTo4326 = new DefaultCoordinateOperationFactory().createOperation(sourceCRS, targetCRS);
+        CoordinateOperation transformFrom4326 = new DefaultCoordinateOperationFactory().createOperation(targetCRS, sourceCRS);
 
-            resolution = getBBoxes4326(bboxString, width, height, size, vars.uncertainty, mbbox, bbox, pbbox, tilebbox);
-        } else {
-            resolution = getBBoxes(bboxString, width, height, size, vars.uncertainty, mbbox, bbox, pbbox, tilebbox);
-        }
+        double resolution;
+
+        // support for any srs
+        resolution = getBBoxesSRS(transformTo4326, bboxString, width, height, size, vars.uncertainty, mbbox, bbox, pbbox, tilebbox);
 
         PointType pointType = getPointTypeForDegreesPerPixel(resolution);
         if (logger.isDebugEnabled()) {
             logger.debug("Rendering: " + pointType.name());
-        }
-
-        String q = "";
-
-        //CQL Filter takes precedence of the layer
-        if (StringUtils.trimToNull(cql_filter) != null) {
-            q = WMSUtils.getQ(cql_filter);
-        } else if (StringUtils.trimToNull(layers) != null && !"ALA:Occurrences".equalsIgnoreCase(layers)) {
-            q = WMSUtils.convertLayersParamToQ(layers);
         }
 
         String[] boundingBoxFqs = new String[2];
@@ -1522,6 +1442,15 @@ public class WMSController extends AbstractSecureController{
         int pointWidth = vars.size * 2;
         double width_mult = (width / (pbbox[2] - pbbox[0]));
         double height_mult = (height / (pbbox[1] - pbbox[3]));
+
+
+        //CQL Filter takes precedence of the layer
+        String q = "";
+        if (StringUtils.trimToNull(cql_filter) != null) {
+            q = WMSUtils.getQ(cql_filter);
+        } else if (StringUtils.trimToNull(layers) != null && !"ALA:Occurrences".equalsIgnoreCase(layers)) {
+            q = WMSUtils.convertLayersParamToQ(layers);
+        }
 
         //build request
         if (q.length() > 0) {
@@ -1545,7 +1474,7 @@ public class WMSController extends AbstractSecureController{
         String[] originalFqs = qidCacheDAO.getFq(requestParams);
 
         //get from cache, or make it
-        boolean canCache = wmsCache.isEnabled() && cache.equalsIgnoreCase("on");
+        boolean canCache = wmsCache.isEnabled() && "on".equalsIgnoreCase(cache);
         WMSTile wco = getWMSCacheObject(requestParams, vars, pointType, bbox, originalFqs, boundingBoxFqs, canCache);
 
         //correction for gridDivisionCount
@@ -1560,9 +1489,10 @@ public class WMSController extends AbstractSecureController{
             }
         }
 
-        ImgObj imgObj = wco.getPoints() == null ? null : wmsCached(wco, requestParams, vars, pointType, pbbox, bbox, mbbox,
-                width, height, width_mult, height_mult, pointWidth,
-                originalFqs, hq, boundingBoxFqs, outlinePoints, outlineColour, response, is4326, tilebbox, gridDivisionCount);
+        ImgObj imgObj = wco.getPoints() == null ? null :
+                wmsCached(wco, requestParams, vars, pointType, pbbox, bbox, mbbox, width, height, width_mult,
+                        height_mult, pointWidth, originalFqs, hq, boundingBoxFqs, outlinePoints, outlineColour,
+                        response, tilebbox, gridDivisionCount, transformFrom4326);
 
         if (imgObj != null && imgObj.g != null) {
             imgObj.g.dispose();
@@ -1577,12 +1507,43 @@ public class WMSController extends AbstractSecureController{
         }
     }
 
+    private void transformBBox(CoordinateOperation op, String bbox, double[] source, double[] target) throws TransformException {
+//            if (lat1 <= -90) {
+//                lat1 = -89.999;
+//            }
+//            if (lat2 >= 90) {
+//                lat2 = 89.999;
+//            }
+
+        String[] bb = bbox.split(",");
+
+        source[0] = Double.parseDouble(bb[0]);
+        source[1] = Double.parseDouble(bb[1]);
+        source[2] = Double.parseDouble(bb[2]);
+        source[3] = Double.parseDouble(bb[3]);
+
+        GeneralDirectPosition sw = new GeneralDirectPosition(source[0], source[1]);
+        GeneralDirectPosition ne = new GeneralDirectPosition(source[2], source[3]);
+        GeneralDirectPosition se = new GeneralDirectPosition(source[2], source[1]);
+        GeneralDirectPosition nw = new GeneralDirectPosition(source[0], source[3]);
+        DirectPosition targetSW = op.getMathTransform().transform(sw, null);
+        DirectPosition targetNE = op.getMathTransform().transform(ne, null);
+        DirectPosition targetSE = op.getMathTransform().transform(se, null);
+        DirectPosition targetNW = op.getMathTransform().transform(nw, null);
+
+        target[0] = Math.min(Math.min(Math.min(targetSW.getOrdinate(0), targetNE.getOrdinate(0)), targetSE.getOrdinate(0)), targetNW.getOrdinate(0));
+        target[1] = Math.min(Math.min(Math.min(targetSW.getOrdinate(1), targetNE.getOrdinate(1)), targetSE.getOrdinate(1)), targetNW.getOrdinate(1));
+        target[2] = Math.max(Math.max(Math.max(targetSW.getOrdinate(0), targetNE.getOrdinate(0)), targetSE.getOrdinate(0)), targetNW.getOrdinate(0));
+        target[3] = Math.max(Math.max(Math.max(targetSW.getOrdinate(1), targetNE.getOrdinate(1)), targetSE.getOrdinate(1)), targetNW.getOrdinate(1));
+    }
+
     /**
      * Method that produces the downloadable map integrated in AVH/OZCAM/Biocache.
      *
      * @param requestParams
      * @param format
-     * @param extents
+     * @param extents bounding box in decimal degrees
+     * @param bboxString bounding box in target SRS
      * @param widthMm
      * @param pointRadiusMm
      * @param pradiusPx
@@ -1602,13 +1563,14 @@ public class WMSController extends AbstractSecureController{
     public void generatePublicationMap(
             SpatialSearchRequestParams requestParams,
             @RequestParam(value = "format", required = false, defaultValue = "jpg") String format,
-            @RequestParam(value = "extents", required = true) String extents,
+            @RequestParam(value = "extents", required = false) String extents,
+            @RequestParam(value = "bbox", required = false) String bboxString,
             @RequestParam(value = "widthmm", required = false, defaultValue = "60") Double widthMm,
             @RequestParam(value = "pradiusmm", required = false, defaultValue = "2") Double pointRadiusMm,
             @RequestParam(value = "pradiuspx", required = false) Integer pradiusPx,
             @RequestParam(value = "pcolour", required = false, defaultValue = "FF0000") String pointColour,
             @RequestParam(value = "ENV", required = false, defaultValue = "") String env,
-            @RequestParam(value = "SRS", required = false, defaultValue = "EPSG:900913") String srs,
+            @RequestParam(value = "SRS", required = false, defaultValue = "EPSG:3857") String srs,
             @RequestParam(value = "popacity", required = false, defaultValue = "0.8") Double pointOpacity,
             @RequestParam(value = "baselayer", required = false, defaultValue = "world") String baselayer,
             @RequestParam(value = "scale", required = false, defaultValue = "off") String scale,
@@ -1620,27 +1582,23 @@ public class WMSController extends AbstractSecureController{
             @RequestParam(value = "baseMap", required = false, defaultValue = "ALA") String baseMap,
             HttpServletRequest request, HttpServletResponse response) throws Exception {
 
-        String[] bb = extents.split(",");
-
-        double long1 = Double.parseDouble(bb[0]);
-        double lat1 = Double.parseDouble(bb[1]);
-        double long2 = Double.parseDouble(bb[2]);
-        double lat2 = Double.parseDouble(bb[3]);
-
-        if (lat1 <= -90) {
-            lat1 = -89.999;
+        // convert extents from EPSG:4326 into target SRS
+        CRSAuthorityFactory factory = CRS.getAuthorityFactory(true);
+        CoordinateReferenceSystem sourceCRS = factory.createCoordinateReferenceSystem(srs);
+        CoordinateReferenceSystem targetCRS = factory.createCoordinateReferenceSystem("EPSG:4326");
+        CoordinateOperation transformTo4326 = new DefaultCoordinateOperationFactory().createOperation(sourceCRS, targetCRS);
+        CoordinateOperation transformFrom4326 = new DefaultCoordinateOperationFactory().createOperation(targetCRS, sourceCRS);
+        double[] bbox4326 = new double[4];     // extents in EPSG:4326
+        double[] bboxSRS = new double[4];      //extents in target SRS
+        if (bboxString != null) {
+            transformBBox(transformTo4326, bboxString, bboxSRS, bbox4326);
+        } else {
+            transformBBox(transformFrom4326, extents, bbox4326, bboxSRS);
+            bboxString = bboxSRS[0] + "," + bboxSRS[1] + "," + bboxSRS[2] + "," + bboxSRS[3];
         }
-        if (lat2 >= 90) {
-            lat2 = 89.999;
-        }
-
-        int pminx = convertLngToPixel(long1);
-        int pminy = convertLatToPixel(lat1);
-        int pmaxx = convertLngToPixel(long2);
-        int pmaxy = convertLatToPixel(lat2);
 
         int width = (int) ((dpi / 25.4) * widthMm);
-        int height = (int) Math.round(width * ((pminy - pmaxy) / (double) (pmaxx - pminx)));
+        int height = (int) Math.round(width * ((bboxSRS[3] - bboxSRS[1]) / (bboxSRS[2] - bboxSRS[0])));
 
         if (height * width > MAX_IMAGE_PIXEL_COUNT) {
             String errorMessage = "Image size in pixels " + width + "x" + height + " exceeds " + MAX_IMAGE_PIXEL_COUNT + " pixels.  Make the image smaller";
@@ -1655,9 +1613,6 @@ public class WMSController extends AbstractSecureController{
             pointSize = (int) ((dpi / 25.4) * pointRadiusMm);
         }
 
-        double[] boundingBox = transformBbox4326To900913(Double.parseDouble(bb[0]), Double.parseDouble(bb[1]), Double.parseDouble(bb[2]), Double.parseDouble(bb[3]));
-
-
         String rendering = "ENV=color%3A" + pointColour + "%3Bname%3Acircle%3Bsize%3A" + pointSize
                 + "%3Bopacity%3A" + pointOpacity;
         if(StringUtils.isNotEmpty(env)){
@@ -1671,10 +1626,9 @@ public class WMSController extends AbstractSecureController{
                 + "/ogc/wms/reflect?"
                 + rendering
                 + "&SRS=" + srs
-                + "&BBOX=" + boundingBox[0] + "," + boundingBox[1] + "," + boundingBox[2] + "," + boundingBox[3]
+                + "&BBOX=" + bboxString
                 + "&WIDTH=" + width + "&HEIGHT=" + height
                 + "&OUTLINE=" + outlinePoints + "&OUTLINECOLOUR=" + outlineColour;
-//                + "&" + request.getQueryString();
 
         //get query parameters
         String q = request.getParameter("q");
@@ -1702,7 +1656,7 @@ public class WMSController extends AbstractSecureController{
                 + "LAYERS=ALA%3A" + baselayer
                 + "&SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&STYLES=" + baselayerStyle
                 + "&FORMAT=image%2Fpng&SRS=" + srs     //specify the mercator projection
-                + "&BBOX=" + boundingBox[0] + "," + boundingBox[1] + "," + boundingBox[2] + "," + boundingBox[3]
+                + "&BBOX=" + bboxString
                 + "&WIDTH=" + width + "&HEIGHT=" + height + "&OUTLINE=" + outlinePoints
                 + "&format_options=dpi:" + dpi + ";" + layout;
 
@@ -1710,7 +1664,7 @@ public class WMSController extends AbstractSecureController{
 
         if ("roadmap".equalsIgnoreCase(baseMap) || "satellite".equalsIgnoreCase(baseMap) ||
                 "hybrid".equalsIgnoreCase(baseMap) || "terrain".equalsIgnoreCase(baseMap)){
-            basemapImage = basemapGoogle(width, height, boundingBox, baseMap);
+            basemapImage = basemapGoogle(width, height, bboxSRS, baseMap);
         } else {
             basemapImage = ImageIO.read(new URL(basemapAddress));
         }
@@ -1823,7 +1777,8 @@ public class WMSController extends AbstractSecureController{
                              String[] boundingBoxFqs, boolean outlinePoints,
                              String outlineColour,
                              HttpServletResponse response,
-                             boolean is4326, double[] tilebbox, int gridDivisionCount) throws Exception {
+                             double[] tilebbox, int gridDivisionCount,
+                             CoordinateOperation transformFrom4326) throws Exception {
 
         ImgObj imgObj = null;
 
@@ -1833,8 +1788,6 @@ public class WMSController extends AbstractSecureController{
         int[][] gridCounts = isGrid ? new int[divs][divs] : null;
         int xstep = width / divs;
         int ystep = height / divs;
-        double grid_width_mult = (width / (pbbox[2] - pbbox[0])) / (width / divs);
-        double grid_height_mult = (height / (pbbox[1] - pbbox[3])) / (height / divs);
 
         int x, y;
 
@@ -1879,13 +1832,10 @@ public class WMSController extends AbstractSecureController{
                         float lat = ps[i + 1];
                         if (lng >= bbox[0] && lng <= bbox[2]
                                 && lat >= bbox[1] && lat <= bbox[3]) {
-                            if (is4326) {
-                                x = convertLngToPixel4326(lng, left, right, width);
-                                y = convertLatToPixel4326(lat, top, bottom, height);
-                            } else {
-                                x = (int) ((convertLngToPixel(lng) - pbbox[0]) * grid_width_mult);
-                                y = (int) ((convertLatToPixel(lat) - pbbox[3]) * grid_height_mult);
-                            }
+                            GeneralDirectPosition sourceCoords = new GeneralDirectPosition(lng, lat);
+                            DirectPosition targetCoords = transformFrom4326.getMathTransform().transform(sourceCoords, null);
+                            x = scaleLongitudeForImage(targetCoords.getOrdinate(0), left, right, width);
+                            y = scaleLatitudeForImage(targetCoords.getOrdinate(1), top, bottom, height);
 
                             if (x >= 0 && x < divs && y >= 0 && y < divs) {
                                 gridCounts[x][y] += count[i / 2];
@@ -1893,7 +1843,7 @@ public class WMSController extends AbstractSecureController{
                         }
                     }
                 } else {
-                    renderPoints(vars, bbox, pbbox, width_mult, height_mult, pointWidth, outlinePoints, outlineColour, pColour, imgObj, j, ps, is4326, tilebbox, height, width);
+                    renderPoints(vars, bbox, pbbox, width_mult, height_mult, pointWidth, outlinePoints, outlineColour, pColour, imgObj, j, ps, tilebbox, height, width, transformFrom4326);
                 }
             }
         }
@@ -1920,28 +1870,34 @@ public class WMSController extends AbstractSecureController{
                 }
             }
         } else {
-            drawUncertaintyCircles(requestParams, vars, height, width, pbbox, mbbox, bbox, width_mult, height_mult, imgObj.g,
-                    originalFqs, boundingBoxFqs, is4326, tilebbox, pointType);
+            drawUncertaintyCircles(requestParams, vars, height, width, mbbox, bbox, imgObj.g,
+                    originalFqs, tilebbox, pointType, transformFrom4326);
         }
 
         //highlight
         if (vars.highlight != null) {
-            imgObj = drawHighlight(requestParams, vars, pointType, width, height, pbbox, width_mult, height_mult, imgObj,
-                    originalFqs, boundingBoxFqs, is4326, tilebbox);
+            imgObj = drawHighlight(requestParams, vars, pointType, width, height, imgObj,
+                    originalFqs, boundingBoxFqs, tilebbox, transformFrom4326);
         }
 
         return imgObj;
     }
 
     void drawUncertaintyCircles(SpatialSearchRequestParams requestParams, WmsEnv vars, int height, int width,
-                                double[] pbbox, double[] mbbox, double[] bbox, double width_mult, double height_mult, Graphics2D g,
-                                String[] originalFqs, String[] boundingBoxFqs, boolean is4326, double[] tilebbox,
-                                PointType pointType) throws Exception {
+                                double[] mbbox, double[] bbox, Graphics2D g,
+                                String[] originalFqs, double[] tilebbox,
+                                PointType pointType, CoordinateOperation transformFrom4326) throws Exception {
         //draw uncertainty circles
         double hmult = (height / (mbbox[3] - mbbox[1]));
 
         //min uncertainty for current resolution and dot size
         double min_uncertainty = (vars.size + 1) / hmult;
+
+        //for image scaling
+        double top = tilebbox[3];
+        double bottom = tilebbox[1];
+        double left = tilebbox[0];
+        double right = tilebbox[2];
 
         //only draw uncertainty if max radius will be > dot size
         if (vars.uncertainty && MAX_UNCERTAINTY > min_uncertainty) {
@@ -1984,12 +1940,6 @@ public class WMSController extends AbstractSecureController{
                 if (qr != null && qr.size() > 0) {
                     List<FacetPivotResultDTO> piv = qr.get(0).getPivotResult();
 
-                    //for 4326
-                    double top = tilebbox[3];
-                    double bottom = tilebbox[1];
-                    double left = tilebbox[0];
-                    double right = tilebbox[2];
-
                     double lng, lat;
                     int x, y;
                     int uncertaintyRadius = (int) Math.ceil(uncertaintyR[j] * hmult);
@@ -2006,13 +1956,10 @@ public class WMSController extends AbstractSecureController{
                             lng = Double.parseDouble(lat_lng[1]);
                             lat = Double.parseDouble(lat_lng[0]);
 
-                            if (is4326) {
-                                x = convertLngToPixel4326(lng, left, right, width);
-                                y = convertLatToPixel4326(lat, top, bottom, height);
-                            } else {
-                                x = (int) ((convertLngToPixel(lng) - pbbox[0]) * width_mult);
-                                y = (int) ((convertLatToPixel(lat) - pbbox[3]) * height_mult);
-                            }
+                            GeneralDirectPosition sourceCoords = new GeneralDirectPosition(lng, lat);
+                            DirectPosition targetCoords = transformFrom4326.getMathTransform().transform(sourceCoords, null);
+                            x = scaleLongitudeForImage(targetCoords.getOrdinate(0), left, right, width);
+                            y = scaleLatitudeForImage(targetCoords.getOrdinate(1), top, bottom, height);
 
                             if (uncertaintyRadius > 0) {
                                 g.drawOval(x - uncertaintyRadius, y - uncertaintyRadius, uncertaintyRadius * 2, uncertaintyRadius * 2);
@@ -2027,9 +1974,8 @@ public class WMSController extends AbstractSecureController{
     }
 
     ImgObj drawHighlight(SpatialSearchRequestParams requestParams, WmsEnv vars, PointType pointType,
-                         int width, int height, double[] pbbox, double width_mult,
-                         double height_mult, ImgObj imgObj, String[] originalFqs, String[] boundingBoxFqs,
-                         boolean is4326, double[] tilebbox) throws Exception {
+                         int width, int height, ImgObj imgObj, String[] originalFqs, String[] boundingBoxFqs,
+                         double[] tilebbox, CoordinateOperation transformFrom4326) throws Exception {
         String[] fqs = new String[originalFqs.length + 3];
         System.arraycopy(originalFqs, 0, fqs, 3, originalFqs.length);
         fqs[0] = vars.highlight;
@@ -2053,7 +1999,7 @@ public class WMSController extends AbstractSecureController{
             imgObj.g.setColor(new Color(255, 0, 0, 255));
             int x, y;
 
-            //for 4326
+            //for image scaling
             double top = tilebbox[3];
             double bottom = tilebbox[1];
             double left = tilebbox[0];
@@ -2066,13 +2012,10 @@ public class WMSController extends AbstractSecureController{
                     float lng = Float.parseFloat(lat_lng[1]);
                     float lat = Float.parseFloat(lat_lng[0]);
 
-                    if (is4326) {
-                        x = convertLngToPixel4326(lng, left, right, width);
-                        y = convertLatToPixel4326(lat, top, bottom, height);
-                    } else {
-                        x = (int) ((convertLngToPixel(lng) - pbbox[0]) * width_mult);
-                        y = (int) ((convertLatToPixel(lat) - pbbox[3]) * height_mult);
-                    }
+                    GeneralDirectPosition sourceCoords = new GeneralDirectPosition(lng, lat);
+                    DirectPosition targetCoords = transformFrom4326.getMathTransform().transform(sourceCoords, null);
+                    x = scaleLongitudeForImage(targetCoords.getOrdinate(0), left, right, width);
+                    y = scaleLatitudeForImage(targetCoords.getOrdinate(1), top, bottom, height);
 
                     imgObj.g.drawOval(x - highightRadius, y - highightRadius, highlightWidth, highlightWidth);
                 }
@@ -2522,7 +2465,7 @@ public class WMSController extends AbstractSecureController{
         if (gCount != null) gCount.add(count);
     }
 
-    private void renderPoints(WmsEnv vars, double[] bbox, double[] pbbox, double width_mult, double height_mult, int pointWidth, boolean outlinePoints, String outlineColour, List<Integer> pColour, ImgObj imgObj, int j, float[] ps, boolean is4326, double[] tilebbox, int height, int width) {
+    private void renderPoints(WmsEnv vars, double[] bbox, double[] pbbox, double width_mult, double height_mult, int pointWidth, boolean outlinePoints, String outlineColour, List<Integer> pColour, ImgObj imgObj, int j, float[] ps, double[] tilebbox, int height, int width, CoordinateOperation transformFrom4326) throws TransformException {
         int x;
         int y;
         Paint currentFill = new Color(pColour.get(j), true);
@@ -2542,13 +2485,10 @@ public class WMSController extends AbstractSecureController{
             if (lng >= bbox[0] && lng <= bbox[2]
                     && lat >= bbox[1] && lat <= bbox[3]) {
 
-                if (is4326) {
-                    x = convertLngToPixel4326(lng, left, right, width);
-                    y = convertLatToPixel4326(lat, top, bottom, height);
-                } else {
-                    x = (int) ((convertLngToPixel(lng) - pbbox[0]) * width_mult);
-                    y = (int) ((convertLatToPixel(lat) - pbbox[3]) * height_mult);
-                }
+                GeneralDirectPosition sourceCoords = new GeneralDirectPosition(lng, lat);
+                DirectPosition targetCoords = transformFrom4326.getMathTransform().transform(sourceCoords, null);
+                x = scaleLongitudeForImage(targetCoords.getOrdinate(0), left, right, width);
+                y = scaleLatitudeForImage(targetCoords.getOrdinate(1), top, bottom, height);
 
                 //System.out.println("Drawing an oval.....");
                 imgObj.g.fillOval(x - vars.size, y - vars.size, pointWidth, pointWidth);
@@ -2559,17 +2499,6 @@ public class WMSController extends AbstractSecureController{
                 }
             }
         }
-    }
-
-    //method from 1.3.3.1 Mercator (Spherical) http://www.epsg.org/guides/docs/g7-2.pdf
-    //constant from EPSG:900913
-    private double[] transformBbox4326To900913(double long1, double lat1, double long2, double lat2) {
-        return new double[]{
-                6378137.0 * long1 * Math.PI / 180.0,
-                6378137.0 * Math.log(Math.tan(Math.PI / 4.0 + lat1 * Math.PI / 360.0)),
-                6378137.0 * long2 * Math.PI / 180.0,
-                6378137.0 * Math.log(Math.tan(Math.PI / 4.0 + lat2 * Math.PI / 360.0))
-        };
     }
 
     public void setTaxonDAO(TaxonDAO taxonDAO) {
