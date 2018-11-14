@@ -107,7 +107,7 @@ public class SearchDAOImpl implements SearchDAO {
 
     //sensitive fields and their non-sensitive replacements
     private static final String[] sensitiveCassandraHdr = {"decimalLongitude", "decimalLatitude", "verbatimLocality"};
-    private static final String[] sensitiveSOLRHdr = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference"};
+    private static final String[] sensitiveSOLRHdr = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference"}; // *** RR sensitive_coordinate_uncertainty
     private static final String[] notSensitiveCassandraHdr = {"decimalLongitude_p", "decimalLatitude_p", "locality"};
     private static final String[] notSensitiveSOLRHdr = {"longitude", "latitude", "locality"};
 
@@ -977,18 +977,34 @@ public class SearchDAOImpl implements SearchDAO {
 
             String requestedFieldsParam = getDownloadFields(downloadParams);
 
-            if (includeSensitive) {
+            if (includeSensitive /* || 1==1 */) { // ** RR TODO config option once actual filtering at record-level done
                 //include raw latitude and longitudes
                 if (requestedFieldsParam.contains("decimalLatitude_p")) {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude_p", "sensitive_latitude,sensitive_longitude,decimalLatitude_p");
                 } else if (requestedFieldsParam.contains("decimalLatitude")) {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude", "sensitive_latitude,sensitive_longitude,decimalLatitude");
+                } else if (requestedFieldsParam.contains(",latitude,")) { //SOLR field
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",latitude,", ",sensitive_latitude,sensitive_longitude,latitude,");
                 }
                 if (requestedFieldsParam.contains(",locality,")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality,", ",locality,sensitive_locality,");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality,", ",sensitive_locality,locality,");
                 }
                 if (requestedFieldsParam.contains(",locality_p,")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality_p,", ",locality_p,sensitive_locality,");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality_p,", ",sensitive_locality,locality_p,");
+                }
+                // NBN RR added below
+                //TODO: consider non-SOLR versions of these fields
+                if (requestedFieldsParam.contains(",grid_ref,")) {
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",grid_ref,", ",sensitive_grid_ref,grid_ref,");
+                }
+                if (requestedFieldsParam.contains(",coordinate_uncertainty,")) {
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",coordinate_uncertainty,", ",sensitive_coordinate_uncertainty,coordinate_uncertainty,");
+                }
+                if (requestedFieldsParam.contains(",occurrence_date,")) {
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",occurrence_date,", ",sensitive_event_date,occurrence_date,");
+                }
+                if (requestedFieldsParam.contains(",occurrence_date_end_dt,")) {
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",occurrence_date_end_dt,", ",sensitive_event_date_end,occurrence_date_end_dt,");
                 }
             }
 
@@ -1005,7 +1021,7 @@ public class SearchDAOImpl implements SearchDAO {
                 for (int i = 0; i < requestedFields.length; i++) mappedNames.add(requestedFields[i]);
 
                 indexedFields = new List[]{mappedNames, new java.util.LinkedList<String>(), mappedNames, mappedNames, new ArrayList(), new ArrayList()};
-            } else {
+            } else { // *** RR getting raw_locality instead of sensitive_locality
                 indexedFields = downloadFields.getIndexFields(requestedFields, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
             }
             //apply custom header
@@ -1110,7 +1126,7 @@ public class SearchDAOImpl implements SearchDAO {
             //include sensitive fields in the header when the output will be partially sensitive
             final String[] sensitiveFields;
             final String[] notSensitiveFields;
-            if (dd.getSensitiveFq() != null) {
+            if (dd.getSensitiveFq() != null /*|| 1==1*/) { // *** RR ?
                 List<String>[] sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
 
                 //header for the output file
@@ -1698,7 +1714,7 @@ public class SearchDAOImpl implements SearchDAO {
 
             String dFields = getDownloadFields(downloadParams);
 
-            if (includeSensitive) {
+            if (includeSensitive /* || 1==1 */) { // RR ****
                 //include raw latitude and longitudes
                 dFields = dFields.replaceFirst("decimalLatitude_p", "decimalLatitude,decimalLongitude,decimalLatitude_p").replaceFirst(",locality,", ",locality,sensitive_locality,");
             }
@@ -1871,6 +1887,7 @@ public class SearchDAOImpl implements SearchDAO {
                     }
                 }
                 if (sb.length() > 0 && matcher.end() < fields.length()) sb.append(",");
+                if (sb.length() == 0) sb.append(","); //otherwise pattern eats commas on either side e.g. "speciesGroups_p,el_p,cl20," becomes "speciesGroups_pcl20,"
                 fields = matcher.replaceFirst(sb.toString());
             }
 

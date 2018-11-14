@@ -149,6 +149,9 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
     @Value("${download.email.template:}")
     protected String biocacheDownloadEmailTemplate;
 
+    @Value("${download.email.template_txt:}")
+    protected String biocacheDownloadEmailTemplateTxt = "";
+
     @Value("${download.doi.email.template:}")
     protected String biocacheDownloadDoiEmailTemplate;
 
@@ -555,6 +558,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
             }
             
             final ConcurrentMap<String, AtomicInteger> uidStats;
+            //includeSensitive=true; // RR test
             if (fromIndex) {
                 uidStats = searchDAO.writeResultsFromIndexToStream(requestParams, sp, includeSensitive, dd, limit, parallelExecutor);
             } else {
@@ -918,8 +922,8 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                 Set<IndexFieldDTO> indexedFields = searchDAO.getIndexedFields();
 
                 // header
-                writer.writeNext(new String[] { "Column name", "Requested field", "DwC Name", "Field name",
-                        "Field description", "Download field name", "Download field description", "More information" });
+                writer.writeNext(new String[] { "Column name", "Requested field", "DwC Name", /* "Field name",
+                        "Field description", "Download field name", "Download field description", */ "More information" });
 
                 String[] fieldsRequested = null;
                 String[] headerOutput = null;
@@ -959,11 +963,11 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                         if (ifdto != null && StringUtils.isNotEmpty(headerOutput[i])) {
                             writer.writeNext(new String[] { headerOutput[i], fieldsRequested[i],
                                     ifdto.getDwcTerm() != null ? ifdto.getDwcTerm() : "",
-                                    ifdto.getName() != null ? ifdto.getName() : "",
+                                    /* ifdto.getName() != null ? ifdto.getName() : "",
                                     ifdto.getDescription() != null ? ifdto.getDescription() : "",
                                     ifdto.getDownloadName() != null ? ifdto.getDownloadName() : "",
-                                    ifdto.getDownloadDescription() != null ? ifdto.getDownloadDescription() : "",
-                                    ifdto.getInfo() != null ? ifdto.getInfo() : "" });
+                                    ifdto.getDownloadDescription() != null ? ifdto.getDownloadDescription() : "", */
+                                    /*(ifdto.getDescription() != null ? ifdto.getDescription() + " " : "") +*/ (ifdto.getInfo() != null ? ifdto.getInfo() : "") });
                         } else if (StringUtils.isNotEmpty(headerOutput[i])){
                             // others, e.g. assertions
                             String info = messageSource.getMessage("description." + fieldsRequested[i], null, "", null);
@@ -1248,7 +1252,9 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
 
                                 String doiStr = "";
                                 String emailBody;
+                                String emailBodyTxt;
                                 String emailTemplate;
+                                String emailTemplateTxt = "";
                                 String downloadFileLocation;
                                 if(mintDoi && doiResponseList != null && !doiResponseList.isEmpty() && doiResponseList.get(0) != null) {
 
@@ -1275,11 +1281,11 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                                     }
                                 } else {
                                     emailTemplate = biocacheDownloadEmailTemplate;
+                                    emailTemplateTxt = biocacheDownloadEmailTemplateTxt;
                                     downloadFileLocation = archiveFileLocation;
                                 }
 
                                 emailBody = Files.asCharSource(new File(emailTemplate), StandardCharsets.UTF_8).read();
-
                                 final String searchUrl = generateSearchUrl(currentDownload.getRequestParams());
                                 String emailBodyHtml = emailBody.replace("[url]", downloadFileLocation)
                                         .replace("[date]", currentDownload.getStartDateString())
@@ -1291,6 +1297,19 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                                         new Object[]{archiveFileLocation, searchUrl, currentDownload.getStartDateString()},
                                         emailBodyHtml, null);
 
+                                String bodyTxt = "";
+                                if (!emailTemplateTxt.equals("")) {
+                                    emailBodyTxt = Files.asCharSource(new File(emailTemplateTxt), StandardCharsets.UTF_8).read();
+                                    String emailBodyTxtVer = emailBodyTxt.replace("[url]", downloadFileLocation)
+                                            .replace("[date]", currentDownload.getStartDateString())
+                                            .replace("[searchUrl]", searchUrl)
+                                            .replace("[queryTitle]", currentDownload.getRequestParams().getDisplayString())
+                                            .replace("[doi]", doiStr)
+                                            .replace("[doiFailureMessage]", doiFailureMessage);
+                                    bodyTxt = messageSource.getMessage("offlineEmailBody",
+                                            new Object[]{archiveFileLocation, searchUrl, currentDownload.getStartDateString()},
+                                            emailBodyTxtVer, null);
+                                }
                                 // save the statistics to the download directory
                                 try (FileOutputStream statsStream = FileUtils
                                         .openOutputStream(new File(new File(currentDownload.getFileLocation()).getParent()
@@ -1302,7 +1321,11 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                                     // Delay sending the email to allow the DOI to propagate through to upstream DOI providers
                                     Thread.sleep(doiPropagationDelay);
                                 }
-                                emailService.sendEmail(currentDownload.getEmail(), subject, body);
+                                if (bodyTxt.equals("") ) {
+                                    emailService.sendEmail(currentDownload.getEmail(), subject, body);
+                                } else {
+                                    emailService.sendEmail(currentDownload.getEmail(), subject, body, bodyTxt);
+                                }
                             }
 
                         } catch (InterruptedException e) {

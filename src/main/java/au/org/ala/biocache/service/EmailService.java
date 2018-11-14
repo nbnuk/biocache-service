@@ -26,6 +26,9 @@ import javax.mail.Session;
 import javax.mail.Transport;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeBodyPart;
+import javax.mail.internet.MimeMultipart;
+import javax.mail.Multipart;
 
 /**
  * A service responsible for sending emails.
@@ -59,7 +62,7 @@ public class EmailService {
      * @param content
      * @param sender
      */
-    public void sendEmail(String recipient, String subject, String content, String sender){
+    public void sendEmail(String recipient, String subject, String content, String contentTxt, String sender){
         
         logger.debug("Send email to : " + recipient);
 //        logger.debug("Body: " + content);
@@ -71,7 +74,20 @@ public class EmailService {
             message.setFrom(new InternetAddress(sender));
             message.addRecipient(Message.RecipientType.TO, new InternetAddress(recipient));
             message.setSubject(subject);
-            message.setContent(content, "text/html" );
+
+            if (contentTxt.equals("")) {
+                message.setContent(content, "text/html");
+            } else {
+                final MimeBodyPart textPart = new MimeBodyPart();
+                textPart.setContent(contentTxt, "text/plain");
+                final MimeBodyPart htmlPart = new MimeBodyPart();
+                htmlPart.setContent(content, "text/html");
+                final Multipart mp = new MimeMultipart("alternative");
+                mp.addBodyPart(textPart);
+                mp.addBodyPart(htmlPart);
+                message.setContent(mp);
+                logger.info("Sending html + text multipart email");
+            }
             Transport.send(message);
         } catch (Exception e){
             logger.error("Unable to send email to " + recipient + ".\n"+content, e);
@@ -86,7 +102,18 @@ public class EmailService {
      * @param content
      */
     public void sendEmail(String recipient, String subject, String content){
-        sendEmail(recipient, subject, content, sender);
+        sendEmail(recipient, subject, content, "", sender);
+    }
+
+    /**
+     * Sends an email from the default sender using the supplied details.
+     *
+     * @param recipient
+     * @param subject
+     * @param content
+     */
+    public void sendEmail(String recipient, String subject, String content, String contentTxt){
+        sendEmail(recipient, subject, content, contentTxt, sender);
     }
     
     /**
