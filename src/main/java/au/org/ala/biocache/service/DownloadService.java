@@ -553,7 +553,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
             }
             
             final ConcurrentMap<String, AtomicInteger> uidStats;
-            //includeSensitive=true; // RR test
+
             if (fromIndex) {
                 uidStats = searchDAO.writeResultsFromIndexToStream(requestParams, sp, includeSensitive, dd, limit, parallelExecutor);
             } else {
@@ -969,7 +969,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                         } else if (StringUtils.isNotEmpty(headerOutput[i])){
                             // others, e.g. assertions
                             String info = messageSource.getMessage("description." + fieldsRequested[i], null, "", null);
-                            writer.writeNext(new String[] { headerOutput[i], fieldsRequested[i], "", "", "", "", "",
+                            writer.writeNext(new String[] { headerOutput[i], fieldsRequested[i], "", /* "", "", "", "", */
                                     info != null ? info : "" });
                         }
                     }
