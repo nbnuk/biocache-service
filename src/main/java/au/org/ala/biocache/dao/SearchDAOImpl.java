@@ -1055,7 +1055,7 @@ public class SearchDAOImpl implements SearchDAO {
 
             setWhitelistedDetails(dd, downloadParams);
 
-            if (includeSensitive || hasWhitelistedSensitiveRecords ) { // ** RR
+            if (includeSensitive || hasWhitelistedSensitiveRecords ) {
                 //include raw latitude and longitudes
                 if (requestedFieldsParam.contains("decimalLatitude_p")) {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude_p", "sensitive_latitude,sensitive_longitude,decimalLatitude_p");
@@ -1081,11 +1081,13 @@ public class SearchDAOImpl implements SearchDAO {
                 if (requestedFieldsParam.contains(",coordinate_uncertainty,")) {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst(",coordinate_uncertainty,", ",sensitive_coordinate_uncertainty,coordinate_uncertainty,");
                 }
-                if (requestedFieldsParam.contains(",occurrence_date,")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",occurrence_date,", ",sensitive_event_date,occurrence_date,");
-                }
-                if (requestedFieldsParam.contains(",occurrence_date_end_dt,")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",occurrence_date_end_dt,", ",sensitive_event_date_end,occurrence_date_end_dt,");
+                if (Config.sensitiveDateDay()) {
+                    if (requestedFieldsParam.contains(",occurrence_date,")) {
+                        requestedFieldsParam = requestedFieldsParam.replaceFirst(",occurrence_date,", ",sensitive_event_date,occurrence_date,");
+                    }
+                    if (requestedFieldsParam.contains(",occurrence_date_end_dt,")) {
+                        requestedFieldsParam = requestedFieldsParam.replaceFirst(",occurrence_date_end_dt,", ",sensitive_event_date_end,occurrence_date_end_dt,");
+                    }
                 }
             }
 
