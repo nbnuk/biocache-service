@@ -108,10 +108,16 @@ public class SearchDAOImpl implements SearchDAO {
     public static final String OCCURRENCE_YEAR_INDEX_FIELD = "occurrence_year";
 
     //sensitive fields and their non-sensitive replacements
-    private static final String[] sensitiveCassandraHdr = {"decimalLongitude", "decimalLatitude", "locality", "eventDate", "eventDateEnd", "gridReference", "coordinateUncertaintyInMeters_p"};
+    private static final String[] sensitiveCassandraHdr = {"decimalLongitude", "decimalLatitude", "locality", "eventDate", "eventDateEnd", "gridReference", "coordinateUncertaintyInMeters"};
     private static final String[] sensitiveSOLRHdr = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"}; // *** RR sensitive_coordinate_uncertainty
+
+    private static final String[] sensitiveCassandraHdr_NoDay = {"decimalLongitude", "decimalLatitude", "locality", "gridReference", "coordinateUncertaintyInMeters"};
+    private static final String[] sensitiveSOLRHdr_NoDay = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"}; // *** RR sensitive_coordinate_uncertainty
+
     private static final String[] notSensitiveCassandraHdr = {"decimalLongitude_p", "decimalLatitude_p", "locality", "eventDate_p", "eventDateEnd_p", "gridReference", "coordinateUncertaintyInMeters_p"};
-    private static final String[] notSensitiveSOLRHdr = {}; //{"longitude", "latitude", "locality"};
+    private static final String[] notSensitiveCassandraHdr_NoDay = {"decimalLongitude_p", "decimalLatitude_p", "locality", "gridReference", "coordinateUncertaintyInMeters_p"};
+
+    private static final String[] notSensitiveSOLRHdr = {"longitude", "latitude", "locality", "grid_reference", "coordinate_uncertainty"};
 
     /**
      * SOLR client instance
@@ -1222,7 +1228,12 @@ public class SearchDAOImpl implements SearchDAO {
             final String[] sensitiveFields;
             final String[] notSensitiveFields;
             if (dd.getSensitiveFq() != null ) { // *** RR ?
-                List<String>[] sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
+                List<String>[] sensitiveHdr;
+                if (Config.sensitiveDateDay()) {
+                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
+                } else {
+                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr_NoDay, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
+                }
 
                 //header for the output file
                 indexedFields[2].addAll(sensitiveHdr[2]);
@@ -1430,7 +1441,11 @@ public class SearchDAOImpl implements SearchDAO {
                 // - there is a sensitive fq
                 final List<SolrQuery> sensitiveQ = new ArrayList<SolrQuery>();
                 if (!includeSensitive && dd.getSensitiveFq() != null) {
-                    sensitiveQ.addAll(splitQueries(queries, dd.getSensitiveFq(), sensitiveSOLRHdr, notSensitiveSOLRHdr));
+                    if (Config.sensitiveDateDay()) {
+                        sensitiveQ.addAll(splitQueries(queries, dd.getSensitiveFq(), sensitiveSOLRHdr, notSensitiveSOLRHdr));
+                    } else {
+                        sensitiveQ.addAll(splitQueries(queries, dd.getSensitiveFq(), sensitiveSOLRHdr_NoDay, notSensitiveSOLRHdr));
+                    }
                 }
 
                 final AtomicInteger resultsCount = new AtomicInteger(0);
@@ -1950,17 +1965,28 @@ public class SearchDAOImpl implements SearchDAO {
             //append sensitive fields for the header only
             if (!includeSensitive && dd.getSensitiveFq() != null && !hasWhitelistedSensitiveRecords) { //** RR
                 //sensitive headers do not have a DwC name, always set getIndexFields dwcHeader=false
-                List<String>[] sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
+                List<String>[] sensitiveHdr;
+                if (Config.sensitiveDateDay()) {
+                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
+                } else {
+                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr_NoDay, false, downloadParams.getLayersServiceUrl());
+                }
 
                 titles = org.apache.commons.lang3.ArrayUtils.addAll(titles, sensitiveHdr[2].toArray(new String[]{}));
             } else if (hasWhitelistedSensitiveRecords) {
-                List<String>[] sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
+                List<String>[] sensitiveHdr;
+                if (Config.sensitiveDateDay()) {
+                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
+                } else {
+                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr_NoDay, false, downloadParams.getLayersServiceUrl());
+                }
 
                 titles = org.apache.commons.lang3.ArrayUtils.addAll(titles, sensitiveHdr[2].toArray(new String[]{}));
             }
             String[] header = org.apache.commons.lang3.ArrayUtils.addAll(titles, analysisHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, speciesListHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, qaTitles);
+            header = org.apache.commons.lang3.ArrayUtils.add(header, "Coordinate uncertainty - processed");
 
             //Create the Writer that will be used to format the records
             //construct correct RecordWriter based on the supplied fileType
@@ -2141,7 +2167,7 @@ public class SearchDAOImpl implements SearchDAO {
         queryFormatUtils.formatSearchQuery(downloadParams);
         solrQuery.setQuery(downloadParams.getFormattedQuery());
         //Only the fields specified below will be included in the results from the SOLR Query
-        solrQuery.setFields("id", "institution_uid", "collection_uid", "data_resource_uid", "data_provider_uid", "lft", "rgt", "taxon_concept_lsid");
+        solrQuery.setFields("id", "institution_uid", "collection_uid", "data_resource_uid", "data_provider_uid", "lft", "rgt", "taxon_concept_lsid", "coordinate_uncertainty"); //NBN: added coordinate_uncertainty ***
 
         if (dd != null) {
             dd.resetCounts();
@@ -2151,7 +2177,11 @@ public class SearchDAOImpl implements SearchDAO {
         if (analysisLayers.length > 0) {
 
             if (!includeSensitive && dd.getSensitiveFq() != null) {
-                for (String s : sensitiveSOLRHdr) solrQuery.addField(s);
+                if (Config.sensitiveDateDay()) {
+                    for (String s : sensitiveSOLRHdr) solrQuery.addField(s);
+                } else {
+                    for (String s : sensitiveSOLRHdr_NoDay) solrQuery.addField(s);
+                }
             } else {
                 for (String s : notSensitiveSOLRHdr) solrQuery.addField(s);
             }
@@ -2179,18 +2209,18 @@ public class SearchDAOImpl implements SearchDAO {
 
         final String[] sensitiveFields;
         final String[] notSensitiveFields;
-        if (!includeSensitive && dd.getSensitiveFq() != null && !hasWhitelistedSensitiveRecords) { //** RR
+        if ((!includeSensitive && dd.getSensitiveFq() != null && !hasWhitelistedSensitiveRecords) ||
+                (hasWhitelistedSensitiveRecords))  { //** RR
             //lookup for fields from sensitive queries
-            sensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, sensitiveCassandraHdr);
+            if (Config.sensitiveDateDay()) {
+                sensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, sensitiveCassandraHdr);
+                //use general fields when sensitive data is not permitted
+                notSensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, notSensitiveCassandraHdr);
+            } else {
+                sensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, sensitiveCassandraHdr_NoDay);
+                notSensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, notSensitiveCassandraHdr_NoDay);
+            }
 
-            //use general fields when sensitive data is not permitted
-            notSensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, notSensitiveCassandraHdr);
-        } else if (hasWhitelistedSensitiveRecords) {
-            //lookup for fields from sensitive queries
-            sensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, sensitiveCassandraHdr);
-
-            //use general fields when sensitive data is not permitted
-            notSensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, notSensitiveCassandraHdr);
         } else {
             sensitiveFields = new String[0];
             notSensitiveFields = fields;
@@ -2280,6 +2310,27 @@ public class SearchDAOImpl implements SearchDAO {
                                         }
                                     }
                                 }
+                            }
+
+                            //NBN: sensitive records originalSensitiveValues.coordinateUncertaintyInMeters_p is overwriting the actual (cruder) coordinateUncertaintyInMeters_p
+                            //TODO: this needs fixing (e.g by stashing the value into originalSensitiveValues.coordinateUncertaintyInMeters) but might have other side-effects e.g. for grid-derived coordinateUncertainties
+                            //coordinateUncertaintyInMeters
+                            if (sd.containsKey("coordinate_uncertainty")) {
+                                String coordinate_uncertainty = String.valueOf(sd.getFieldValue("coordinate_uncertainty"));
+                                int extraOffset = 0;
+
+                                // expand 'extra' array for coordinate_uncertainty value
+                                if (extra == null) {
+                                    extra = new String[1];
+                                } else {
+                                    extraOffset = extra.length;
+
+                                    String[] tmp = new String[extra.length + 1];
+                                    System.arraycopy(extra, 0, tmp, 0, extra.length);
+                                    extra = tmp;
+                                }
+                                dataToInsert.put(uuid, extra);
+                                extra[extraOffset] = coordinate_uncertainty;
                             }
 
                             //increment the counters....

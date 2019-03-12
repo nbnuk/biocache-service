@@ -57,6 +57,10 @@ public class AppConfig {
     @Value("${facet.default:true}")
     protected Boolean facetDefault;
 
+    //NBN - event date days are not sensitive
+    @Value("${sensitive.date.day:true}")
+    protected Boolean sensitiveDateDay;
+
 
     //Set RestartDataService.dir before classes using RestartDataService are instantiated.
     @Value("${restart.data.dir:/tmp}")
