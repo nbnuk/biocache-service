@@ -38,7 +38,9 @@ public class AbstractSecureController {
 
     private final static Logger logger = LoggerFactory.getLogger(AbstractSecureController.class);
 
-    @Value("${api.check.url:https://auth.ala.org.au/apikey/ws/check?apikey=}")
+    //@Value("${api.check.url:https://auth.ala.org.au/apikey/ws/check?apikey=}")
+    //RR May 2019 for 'Forbidden' error when annotating records
+    @Value("${api.check.url:https://auth.nbnatlas.org/apikey/ws/check?apikey=}")
     protected String apiCheckUrl;
 
     @Value("${api.check.enabled:true}")
@@ -100,7 +102,7 @@ public class AbstractSecureController {
     	
 		//check via a web service
 		try {
-			logger.debug("Checking api key: {}", keyToTest);
+			logger.info("Checking api key: {}", keyToTest);
     		String url = apiCheckUrl + keyToTest;
     		ObjectMapper om = new ObjectMapper();
     		Map<String,Object> response = om.readValue(new URL(url), Map.class);
