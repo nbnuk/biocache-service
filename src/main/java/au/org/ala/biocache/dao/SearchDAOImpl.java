@@ -468,9 +468,12 @@ public class SearchDAOImpl implements SearchDAO {
     }
 
     protected void setWhitelistedDetails (DownloadDetailsDTO dd, DownloadRequestParams downloadParams) {
-        Map<String,?> user = authService.getUserDetails(dd.getEmail());
+        Map<String,?> user = null;
+        if (dd.getEmail() != "") {
+            user = authService.getUserDetails(dd.getEmail());
+        }
 
-        final String jsonUri = registryUrl + "/sensitiveAccess/" + user.get("userId");
+        final String jsonUri = registryUrl + "/sensitiveAccess/" + (user == null? "-1" : user.get("userId")); //user is null if spatial(?) download. request doesn't include email, downloaded directly.
         logger.info("Requesting whitelisting for user: " + jsonUri);
         Map<String,Map> dataResourceTaxaWhitelist = new HashMap<>();
         try {
@@ -1896,7 +1899,13 @@ public class SearchDAOImpl implements SearchDAO {
             if (includeSensitive) {
                 //include raw latitude and longitudes
                 dFields = dFields.replaceFirst("decimalLatitude_p", "decimalLatitude,decimalLongitude,decimalLatitude_p").replaceFirst(",locality,", ",locality,sensitive_locality,");
+
             }
+            //strip out these fields added to custom downloads from indexFields.txt - coordinateUncertaintyInMeters_p is added via SOLR since it is misleading for sensitive records (actually raw coordUncertainty)
+            dFields = dFields.replaceFirst("coordinateUncertaintyInMeters_p,","");
+            dFields = dFields.replaceFirst("coordinateUncertaintyInMeters,","");
+            dFields = dFields.replaceFirst("decimalLatitude,","");
+            dFields = dFields.replaceFirst("decimalLongitude,","");
 
             StringBuilder sb = new StringBuilder(dFields);
             if (downloadParams.getExtra().length() > 0) {
@@ -1983,10 +1992,12 @@ public class SearchDAOImpl implements SearchDAO {
 
                 titles = org.apache.commons.lang3.ArrayUtils.addAll(titles, sensitiveHdr[2].toArray(new String[]{}));
             }
-            String[] header = org.apache.commons.lang3.ArrayUtils.addAll(titles, analysisHeaders);
+
+            String[] header = org.apache.commons.lang3.ArrayUtils.add(titles, "Coordinate uncertainty - processed");
+            header = org.apache.commons.lang3.ArrayUtils.addAll(header, analysisHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, speciesListHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, qaTitles);
-            header = org.apache.commons.lang3.ArrayUtils.add(header, "Coordinate uncertainty - processed");
+
 
             //Create the Writer that will be used to format the records
             //construct correct RecordWriter based on the supplied fileType
