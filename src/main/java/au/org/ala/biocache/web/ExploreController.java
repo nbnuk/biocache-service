@@ -190,29 +190,37 @@ public class ExploreController {
         String oldName = null;
         String kingdom = null;
         //set the counts an indent levels for all the species groups
+        String last_sg = "ALL_SPECIES";
+        String last_sg_parent = "";
         for(au.org.ala.biocache.vocab.SpeciesGroup sg : sgs){
             logger.debug("name: " + sg.name() + " parent: " +sg.parent());
-            int level =3;
-            SpeciesGroupDTO sdto = new SpeciesGroupDTO();
-            sdto.setName(sg.name());
+            if (last_sg.equalsIgnoreCase(sg.name()) && last_sg_parent.equalsIgnoreCase(sg.parent())) {
+                logger.debug("skipping as duplicate");
+            } else {
+                int level = 3;
+                SpeciesGroupDTO sdto = new SpeciesGroupDTO();
+                sdto.setName(sg.name());
 
-            if(oldName!= null && sg.parent()!= null && sg.parent().equals(kingdom)) {
-                level = 2;
+                if (oldName != null && sg.parent() != null && sg.parent().equals(kingdom)) {
+                    level = 2;
+                }
+
+                oldName = sg.name();
+                if (sg.parent() == null) {
+                    level = 1;
+                    kingdom = sg.name();
+                }
+                sdto.setLevel(level);
+                //set the original query back to default to clean up after ourselves
+                requestParams.setQ(originalQ);
+                //query per group
+                counts = getYourAreaCount(requestParams, sg.name());
+                sdto.setCount(counts[0]);
+                sdto.setSpeciesCount(counts[1]);
+                speciesGroups.add(sdto);
             }
-            
-            oldName = sg.name();
-            if(sg.parent() == null){
-                level = 1;
-                kingdom = sg.name();
-            }
-            sdto.setLevel(level);
-            //set the original query back to default to clean up after ourselves
-            requestParams.setQ(originalQ);
-            //query per group
-            counts = getYourAreaCount(requestParams, sg.name());
-            sdto.setCount(counts[0]);
-            sdto.setSpeciesCount(counts[1]);
-            speciesGroups.add(sdto);
+            last_sg = sg.name();
+            last_sg_parent = sg.parent();
         }
         return speciesGroups;
 	}
