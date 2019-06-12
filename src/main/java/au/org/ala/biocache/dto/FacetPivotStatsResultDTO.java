@@ -20,23 +20,13 @@ import java.util.List;
 /**
  * Group result for a SOLR search
  */
-public class FacetPivotStatsResultDTO {
+public class FacetPivotStatsResultDTO extends FacetPivotResultDTO {
+
     /**
-     * Name of the value of this pivot
+     * Set of pivot results including statistics
      */
-    private String value;
-    /**
-     * Name of the field being treated as a facet for the pivotResult
-     */
-    private String pivotField;
-    /**
-     * Set of pivot results
-     */
-    private List<FacetPivotStatsResultDTO> pivotResult;
-    /**
-     * The number of distinct values in the field - can only be populated from "groups"
-     */
-    private Integer count;
+    private List<FacetPivotStatsResultDTO> pivotStatsResult;
+
 
     private String stats;
 
@@ -45,17 +35,16 @@ public class FacetPivotStatsResultDTO {
      * Constructor
      *
      * @param pivotField  Field used as a facet
-     * @param pivotResult Terms and counts returned from a facet search on this field
+     * @param pivotStatsResult Terms and counts returned from a facet search on this field
      */
-    public FacetPivotStatsResultDTO(String pivotField, List<FacetPivotStatsResultDTO> pivotResult) {
-        this.pivotField = pivotField;
-        this.pivotResult = pivotResult;
+    public FacetPivotStatsResultDTO(String pivotField, List<FacetPivotStatsResultDTO> pivotStatsResult) {
+        super(pivotField, null);
+        this.pivotStatsResult = pivotStatsResult;
     }
 
-    public FacetPivotStatsResultDTO(String pivotField, List<FacetPivotStatsResultDTO> pivotResult, String value, Integer count, String stats) {
-        this(pivotField, pivotResult);
-        this.value = value != null ? value : "";
-        this.count = count;
+    public FacetPivotStatsResultDTO(String pivotField, List<FacetPivotStatsResultDTO> pivotStatsResult, String value, Integer count, String stats) {
+        super(pivotField,null,value,count);
+        this.pivotStatsResult = pivotStatsResult;
         this.stats = stats != null? stats : "";
     }
 
@@ -65,42 +54,12 @@ public class FacetPivotStatsResultDTO {
     public FacetPivotStatsResultDTO() {
     }
 
-    public String getPivotField() {
-        return pivotField;
+    public List<FacetPivotStatsResultDTO> getPivotStatsResult() {
+        return pivotStatsResult;
     }
 
-    public void setPivotField(String pivotField) {
-        this.pivotField = pivotField;
-    }
-
-    public List<FacetPivotStatsResultDTO> getPivotResult() {
-        return pivotResult;
-    }
-
-    public void setPivotResult(ArrayList<FacetPivotStatsResultDTO> pivotResult) {
-        this.pivotResult = pivotResult;
-    }
-
-    public String getValue() {
-        return value;
-    }
-
-    public void setValue(String value) {
-        this.value = value;
-    }
-
-    /**
-     * @return the count
-     */
-    public Integer getCount() {
-        return count;
-    }
-
-    /**
-     * @param count the count to set
-     */
-    public void setCount(Integer count) {
-        this.count = count;
+    public void setPivotStatsResult(ArrayList<FacetPivotStatsResultDTO> pivotStatsResult) {
+        this.pivotStatsResult = pivotStatsResult;
     }
 
     /**
