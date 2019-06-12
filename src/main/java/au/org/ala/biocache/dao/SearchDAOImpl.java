@@ -4509,6 +4509,31 @@ public class SearchDAOImpl implements SearchDAO {
         return list;
     }
 
+    /**
+     * Read nested pivot results.
+     *
+     * @param pfl
+     * @return
+     */
+    private List<FacetPivotStatsResultDTO> getFacetPivotStatsResults(List<PivotField> pfl) {
+        if (pfl == null || pfl.size() == 0) {
+            return null;
+        }
+
+        List<FacetPivotStatsResultDTO> list = new ArrayList<>();
+        for (PivotField pf : pfl) {
+            String value = pf.getValue() != null ? pf.getValue().toString() : null;
+            String stats = pf.getFieldStatsInfo() != null ? pf.getFieldStatsInfo().toString() : null;
+            if (pf.getPivot() == null || pf.getPivot().size() == 0) {
+                list.add(new FacetPivotStatsResultDTO(null, null, value, pf.getCount(), stats));
+            } else {
+                list.add(new FacetPivotStatsResultDTO(pf.getPivot().get(0).getField(), getFacetPivotStatsResults(pf.getPivot()), value, pf.getCount(), stats));
+            }
+        }
+
+        return list;
+    }
+
     public StringBuilder getAllQAFields() {
         //include all assertions
         StringBuilder qasb = new StringBuilder();
@@ -4570,6 +4595,61 @@ public class SearchDAOImpl implements SearchDAO {
             if (response.getFieldStatsInfo().size() > 0) {
                 output.add(new FieldStatsItem(response.getFieldStatsInfo().values().iterator().next()));
             }
+        }
+
+        return output;
+    }
+
+    /**
+     * @see au.org.ala.biocache.dao.SearchDAO#searchPivotStats
+     */
+    public List<FacetPivotStatsResultDTO> searchPivotStats(SpatialSearchRequestParams searchParams, String stats) throws Exception {
+        String pivot = StringUtils.join(searchParams.getFacets(), ",");
+        searchParams.setFacets(new String[]{});
+
+        queryFormatUtils.formatSearchQuery(searchParams);
+        String queryString = searchParams.getFormattedQuery();
+
+        searchParams.setFacet(true);
+
+        //get facet group counts
+        SolrQuery query = initSolrQuery(searchParams, false, null);
+        query.setQuery(queryString);
+        query.setFields(null);
+        //query.setFacetLimit(-1);
+
+        query.add("facet.pivot", pivot);
+        query.add("facet.pivot.mincount", "1");
+        query.add("facet.missing", "true");
+
+        //stats parameters
+        query.add("stats", "true");
+        query.add("stats.field", stats);
+
+        query.setRows(0);
+        searchParams.setPageSize(0);
+        logger.info("Solr query searchParams:: " + searchParams.toString());
+        logger.info("Solr query:: " + query.toString());
+        QueryResponse response = runSolrQuery(query, searchParams);
+
+        NamedList<List<PivotField>> result = response.getFacetPivot();
+        logger.info(result.toString());
+
+        List<FacetPivotStatsResultDTO> output = new ArrayList();
+        for (Entry<String, List<PivotField>> pfl : result) {
+            List<PivotField> list = pfl.getValue();
+            if (list != null && list.size() > 0) {
+                output.add(new FacetPivotStatsResultDTO(
+                        list.get(0).getField(),
+                        getFacetPivotStatsResults(list),
+                        null,
+                        (int) response.getResults().getNumFound(),
+                        null)
+                );
+            }
+
+            //should only be one result
+            break;
         }
 
         return output;

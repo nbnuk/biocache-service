@@ -384,6 +384,18 @@ public interface SearchDAO {
     List<FacetPivotResultDTO> searchPivot(SpatialSearchRequestParams searchParams) throws Exception;
 
     /**
+     * Perform one pivot facet query including statistics.
+     * <p/>
+     * facets is the pivot facet list
+     *
+     * @param searchParams
+     * @param stats
+     * @return
+     * @throws Exception
+     */
+    List<FacetPivotStatsResultDTO> searchPivotStats(SpatialSearchRequestParams searchParams, String stats) throws Exception;
+
+    /**
      * Return statistics for a numerical field.
      * <p>
      * Supply an optional facet to return statistics for each value in the facet.
