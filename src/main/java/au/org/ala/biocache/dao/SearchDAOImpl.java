@@ -169,6 +169,9 @@ public class SearchDAOImpl implements SearchDAO {
     @Value("${registry.url:http://collections.ala.org.au/ws}")
     protected String registryUrl;
 
+    @Value("${download.whitelisted.licenseAnnotation:}")
+    protected String whitelistedLicenseAnnotation;
+
     /* does this user have access to sensitive records within this download? */
     protected Boolean hasWhitelistedSensitiveRecords;
     /* the user's whitelist */
@@ -374,6 +377,8 @@ public class SearchDAOImpl implements SearchDAO {
         }
 
         getMaxBooleanClauses();
+
+        if (whitelistedLicenseAnnotation.isEmpty()) whitelistedLicenseAnnotation = null;
     }
 
     public void refreshCaches() {
@@ -1230,7 +1235,7 @@ public class SearchDAOImpl implements SearchDAO {
             //include sensitive fields in the header when the output will be partially sensitive
             final String[] sensitiveFields;
             final String[] notSensitiveFields;
-            if (dd.getSensitiveFq() != null ) { // *** RR ?
+            if (dd.getSensitiveFq() != null ) {
                 List<String>[] sensitiveHdr;
                 if (Config.sensitiveDateDay()) {
                     sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
@@ -1488,10 +1493,10 @@ public class SearchDAOImpl implements SearchDAO {
                                 }
                                 int count = 0;
                                 if (sensitiveQ.contains(splitByFacetQuery)) {
-                                    count = processQueryResults(uidStats, sensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, true);
+                                    count = processQueryResults(uidStats, sensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, true, whitelistedLicenseAnnotation);
                                 } else {
                                     // write non-sensitive values into sensitive fields when not authorised for their sensitive values
-                                    count = processQueryResults(uidStats, notSensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, false);
+                                    count = processQueryResults(uidStats, notSensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, false, whitelistedLicenseAnnotation);
                                 }
                                 recordsForThread.addAndGet(count);
                                 // we have already set the Filter query the first time the query was constructed
@@ -1681,6 +1686,15 @@ public class SearchDAOImpl implements SearchDAO {
                                     AtomicInteger resultsCount, long maxDownloadSize, String[] analysisLayers,
                                     String[] speciesListFields,
                                     List<String> miscFields, Boolean sensitiveDataAllowed) {
+        return processQueryResults(uidStats, fields, qaFields, rw, qr, dd, checkLimit, resultsCount, maxDownloadSize, analysisLayers, speciesListFields, miscFields, sensitiveDataAllowed, "");
+    }
+
+    private int processQueryResults(ConcurrentMap<String, AtomicInteger> uidStats, String[] fields, String[] qaFields,
+                                    RecordWriter rw, QueryResponse qr, DownloadDetailsDTO dd, boolean checkLimit,
+                                    AtomicInteger resultsCount, long maxDownloadSize, String[] analysisLayers,
+                                    String[] speciesListFields,
+                                    List<String> miscFields, Boolean sensitiveDataAllowed,
+                                    String explainWhitelistedLicense) {
         //handle analysis layer intersections
         List<String[]> intersection = intersectResults(dd.getRequestParams().getLayersServiceUrl(), analysisLayers, qr.getResults());
 
@@ -1832,6 +1846,15 @@ public class SearchDAOImpl implements SearchDAO {
                             if (fields[i].startsWith("sensitive_")) {
                                 if (values[i] != null && !values[i].isEmpty()) {
                                     values[i] = "";
+                                }
+                            }
+                        }
+                    }
+                    if (isWhitelistedRec && explainWhitelistedLicense != null && !explainWhitelistedLicense.isEmpty()) {
+                        for (int i = 0; i < fields.length; i++) {
+                            if (fields[i].equals("license") || fields[i].equals("license_p")) {
+                                if (values[i] != null && !values[i].isEmpty()) {
+                                    values[i] = values[i] + " - " + explainWhitelistedLicense;
                                 }
                             }
                         }
@@ -2177,7 +2200,7 @@ public class SearchDAOImpl implements SearchDAO {
         solrQuery.setRows(limit ? MAX_DOWNLOAD_SIZE : -1);
         queryFormatUtils.formatSearchQuery(downloadParams);
         solrQuery.setQuery(downloadParams.getFormattedQuery());
-        //Only the fields specified below will be included in the results from the SOLR Query
+        //Only the fields specified below will be included in the results from the SOLR Query // RR ***
         solrQuery.setFields("id", "institution_uid", "collection_uid", "data_resource_uid", "data_provider_uid", "lft", "rgt", "taxon_concept_lsid", "coordinate_uncertainty"); //NBN: added coordinate_uncertainty ***
 
         if (dd != null) {
@@ -2356,7 +2379,7 @@ public class SearchDAOImpl implements SearchDAO {
 
                 String[] newMiscFields;
                 if (sensitiveQ.contains(q)) {
-                    newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), sensitiveFields, qaFields, true, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert);
+                    newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), sensitiveFields, qaFields, true, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert, whitelistedLicenseAnnotation);
                 } else {
                     newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), notSensitiveFields, qaFields, includeSensitive, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert);
                 }
