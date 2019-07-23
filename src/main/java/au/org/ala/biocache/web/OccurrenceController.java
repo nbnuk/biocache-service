@@ -1801,6 +1801,23 @@ public class OccurrenceController extends AbstractSecureController {
         return null;
     }
 
+    @RequestMapping("occurrence/pivotStats")
+    public
+    @ResponseBody
+    List<FacetPivotStatsResultDTO> searchPivotStats(SpatialSearchRequestParams searchParams,
+                                          @RequestParam(value = "apiKey", required = true) String apiKey,
+                                                    @RequestParam(value = "stats", required = true) String stats,
+                                          HttpServletResponse response) throws Exception {
+        afterInitialisation();
+        if (isValidKey(apiKey)) {
+            return searchDAO.searchPivotStats(searchParams, stats);
+        }
+
+        response.sendError(HttpServletResponse.SC_FORBIDDEN, "An invalid API Key was provided.");
+        return null;
+    }
+
+
     /**
      * List all facets available for a query.
      * <p/>
