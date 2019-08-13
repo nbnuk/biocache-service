@@ -1689,6 +1689,7 @@ public class WMSController extends AbstractSecureController{
         }
 
         URL speciesURL = new URL(speciesAddress);
+        logger.info("speciesURL = " + speciesURL);
         BufferedImage speciesImage = ImageIO.read(speciesURL);
 
         //"http://spatial.ala.org.au/geoserver/wms/reflect?
@@ -1706,6 +1707,7 @@ public class WMSController extends AbstractSecureController{
                 + "&WIDTH=" + width + "&HEIGHT=" + height + "&OUTLINE=" + outlinePoints
                 + "&format_options=dpi:" + dpi + ";" + layout;
 
+        logger.info("basemapAddress = " + basemapAddress);
         BufferedImage basemapImage;
 
         if ("roadmap".equalsIgnoreCase(baseMap) || "satellite".equalsIgnoreCase(baseMap) ||
@@ -1717,7 +1719,7 @@ public class WMSController extends AbstractSecureController{
 
         BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D combined = (Graphics2D) img.getGraphics();
-
+        logger.info("here***");
         combined.drawImage(basemapImage, 0, 0, Color.WHITE, null);
         //combined.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, pointOpacity.floatValue()));
         combined.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
