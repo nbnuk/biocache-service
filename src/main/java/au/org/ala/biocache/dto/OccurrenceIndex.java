@@ -65,6 +65,7 @@ public class OccurrenceIndex {
     @Field("species_guid") String speciesGuid;
     @Field("subspecies") String subspecies;
     @Field("subspecies_guid") String subspeciesGuid;
+    @Field("life_stage") String[] lifeStage; // now Oct-19 multivalued
     @Field("state") String stateProvince;
     @Field("latitude") Double decimalLatitude;
     @Field("longitude") Double decimalLongitude;
@@ -226,7 +227,8 @@ public class OccurrenceIndex {
         addToMapIfNotNull(map, "taxon_name",scientificName);
         addToMapIfNotNull(map, "common_name",vernacularName);
         addToMapIfNotNull(map, "rank",taxonRank);
-        addToMapIfNotNull(map, "rank_id",safeIntToString(taxonRankID)); 
+        addToMapIfNotNull(map, "rank_id",safeIntToString(taxonRankID));
+        addToMapIfNotNull(map, "life_stage", arrToString(lifeStage)); //multivalued
         addToMapIfNotNull(map, "country_code", raw_countryCode);
         addToMapIfNotNull(map, "country", country);
         addToMapIfNotNull(map, "kingdom",kingdom); 
@@ -309,6 +311,7 @@ public class OccurrenceIndex {
         map.put("common_name","vernacularName");
         map.put("rank","taxonRank");
         map.put("rank_id","taxonRankID");
+        map.put("life_stage", "lifeStage");
         map.put("country_code", "raw_countryCode");
         map.put("country", "country");
         map.put("kingdom","kingdom");
@@ -624,6 +627,10 @@ public class OccurrenceIndex {
     public void setSubspeciesGuid(String subspeciesGuid) {
         this.subspeciesGuid = subspeciesGuid;
     }
+
+    public String[] getLifeStage() { return lifeStage; } //multivalued
+
+    public void setLifeStage(String[] lifeStage) { this.lifeStage = lifeStage; }
     
     public String getStateProvince() {
         return stateProvince;
