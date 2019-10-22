@@ -1723,11 +1723,12 @@ public class SearchDAOImpl implements SearchDAO {
                     if (allValues == null) {
                         values[j] = "";
                     } else {
+                        values[j]="";
                         Iterator it = allValues.iterator();
                         while (it.hasNext()) {
                             Object value = it.next();
                             if (values[j] != null && values[j].length() > 0) values[j] += "|"; //multivalue separator
-                            values[j] = formatValue(value);
+                            values[j] += formatValue(value);
 
                             //allow requests to include multiple values when requested
                             if (dd == null || dd.getRequestParams() == null ||
