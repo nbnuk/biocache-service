@@ -48,6 +48,7 @@ public class OccurrenceIndex {
     @Field("occurrence_date") java.util.Date eventDate;
     @Field("occurrence_date_end_dt") java.util.Date eventDateEnd;
     @Field("occurrence_year") java.util.Date occurrenceYear;
+    @Field("vitality") String vitality;
     @Field("taxon_name") String scientificName;
     @Field("common_name") String vernacularName;
     @Field("rank") String taxonRank;
@@ -223,6 +224,7 @@ public class OccurrenceIndex {
         addToMapIfNotNull(map, "taxon_concept_lsid",taxonConceptID);
         addToMapIfNotNull(map, "occurrence_date", sdate);
         addToMapIfNotNull(map, "occurrence_date_end_dt", sdateEnd);
+        addToMapIfNotNull(map, "vitality", vitality);
         addToMapIfNotNull(map, "taxon_name",scientificName);
         addToMapIfNotNull(map, "common_name",vernacularName);
         addToMapIfNotNull(map, "rank",taxonRank);
@@ -305,6 +307,7 @@ public class OccurrenceIndex {
         map.put("taxon_concept_lsid","taxonConceptID");
         map.put("occurrence_date", "eventDate");
         map.put("occurrence_date_end_dt", "eventDateEnd");
+        map.put("vitality", "vitality");
         map.put("taxon_name","scientificName");
         map.put("common_name","vernacularName");
         map.put("rank","taxonRank");
@@ -487,6 +490,14 @@ public class OccurrenceIndex {
 
     public void setOccurrenceYear(Date occurrenceYear) {
         this.occurrenceYear = occurrenceYear;
+    }
+
+    public String getVitality() {
+        return vitality;
+    }
+
+    public void setVitality(String vitality) {
+        this.vitality = vitality;
     }
 
     public String getScientificName() {
