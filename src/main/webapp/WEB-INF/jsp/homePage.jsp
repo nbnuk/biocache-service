@@ -26,15 +26,14 @@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"
 %>
     </head>
     <body>
-        <h1>Occurrence web services</h1>
+        <h1 style="margin-top:25px">Occurrence web services</h1>
         <p>
             For the API reference including examples, please see:
-            <a href="http://api.ala.org.au/">http://api.ala.org.au</a>
+            <a href="https://api.nbnatlas.org/">https://api.nbnatlas.org</a>
             <br/>
             Please send any bug reports, suggestions for improvements or new services to:
-            <strong>support 'AT' ala.org.au</strong>
+            <strong>support 'AT' nbnatlas.org</strong>
             <br/>
-            <a href="${webservicesRoot}/oldapi">Old API reference</a>
         </p>
         <p style="display:none;">
             ${versionInfoString}
