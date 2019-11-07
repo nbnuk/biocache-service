@@ -61,6 +61,9 @@ public class AppConfig {
     @Value("${sensitive.date.day:true}")
     protected Boolean sensitiveDateDay;
 
+    //NBN include multivalue fields (|-delimited) in downloads
+    @Value("${download.multivalue:false}")
+    protected Boolean downloadMultivalue;
 
     //Set RestartDataService.dir before classes using RestartDataService are instantiated.
     @Value("${restart.data.dir:/tmp}")
@@ -69,6 +72,7 @@ public class AppConfig {
         RestartDataService.dir = dir;
     }
 
+    public Boolean getDownloadMultivalue() { return downloadMultivalue; }
 
     protected SpeciesLookupService getSpeciesLookupRestService() {
         logger.info("Initialising rest-based species lookup services.");
