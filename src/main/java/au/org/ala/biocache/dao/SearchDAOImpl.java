@@ -2274,7 +2274,7 @@ public class SearchDAOImpl implements SearchDAO {
                 fq = org.apache.commons.lang3.ArrayUtils.addAll(fq, q.getFilterQueries());
             }
 
-            QueryResponse qr = runSolrQuery(q, fq, pageSize, startIndex, "", "");
+            QueryResponse qr = runSolrQuery(q, fq, pageSize, startIndex, "id", "asc");
             List<String> uuids = new ArrayList<String>();
 
             List<String[]> intersectionAll = intersectResults(dd.getRequestParams().getLayersServiceUrl(), analysisLayers, qr.getResults());
@@ -2396,7 +2396,7 @@ public class SearchDAOImpl implements SearchDAO {
                 dd.updateCounts(qr.getResults().size());
                 if (!limit || resultsCount < MAX_DOWNLOAD_SIZE) {
                     //we have already set the Filter query the first time the query was constructed rerun with he same params but different cursor
-                    qr = runSolrQuery(q, null, pageSize, startIndex, "", "");
+                    qr = runSolrQuery(q, null, pageSize, startIndex, "id", "asc");
                 }
             }
         }
