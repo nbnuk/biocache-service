@@ -126,12 +126,17 @@ public class SpeciesLookupIndexService implements SpeciesLookupService {
             List<String> lsids = new ArrayList<String>();
             if(nsr != null) {
                 LinnaeanRankClassification classification = nsr.getRankClassification();
+                String taxon_rank = "";
+                if (nsr.getRank() != null) taxon_rank = nsr.getRank().name();
                 lsids.add(classification.getGid());
                 lsids.add(classification.getFid());
                 lsids.add(classification.getSid());
                 result = new String[]{
+                        guid,
                         classification.getScientificName(),
                         classification.getAuthorship(),
+                        classification.getNomenclaturalStatus(),
+                        taxon_rank,
                         classification.getKingdom(),
                         classification.getPhylum(),
                         classification.getKlass(),
@@ -205,8 +210,11 @@ public class SpeciesLookupIndexService implements SpeciesLookupService {
     @Override
     public String[] getHeaderDetails(String field, boolean includeCounts, boolean includeSynonyms) {
         String[] baseHeader =  new String[]{
+            messageSource.getMessage("species.id", null,"Taxon ID", null),
             messageSource.getMessage("species.name", null,"Species Name", null),
             messageSource.getMessage("species.author", null,"Scientific Name Author", null),
+            messageSource.getMessage("species.nomenclaturalstatus", null,"Nomenclatural Status", null),
+            messageSource.getMessage("species.rank", null,"Taxon Rank", null),
             messageSource.getMessage("species.kingdom", null,"Kingdom", null),
             messageSource.getMessage("species.phylum", null,"Phylum", null),
             messageSource.getMessage("species.class", null,"Class", null),

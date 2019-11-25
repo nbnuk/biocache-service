@@ -344,6 +344,8 @@ public class SpeciesLookupRestService implements SpeciesLookupService {
     private void initHeaders(){
         baseHeader = new String[]{messageSource.getMessage("species.name", null,"Species Name", null),
                 messageSource.getMessage("species.author", null,"Scientific Name Author", null),
+                //nomenclaturalStatus not include in bie REST service
+                //messageSource.getMessage("species.nomenclaturalstatus", null,"Nomenclatural Status", null),
                 messageSource.getMessage("species.rank", null,"Taxon Rank", null),
                 messageSource.getMessage("species.kingdom", null,"Kingdom", null),
                 messageSource.getMessage("species.phylum", null,"Phylum", null),
