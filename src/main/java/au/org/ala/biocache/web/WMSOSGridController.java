@@ -266,8 +266,8 @@ public class WMSOSGridController {
      *
      * Default behaviour for zoom levels
      *
-     * 313km - just show 10km grids
-     * 156km  - just show 10km grids
+     * 313km - just show 100km grids
+     * 156km  - show 10km grids & 50km grids
      * 78km  - just show 10km grids
      * 39km - 1km grids (TODO  - show 2km grids as well)
      * 19km - 1km grids (TODO  - show 2km grids as well)
@@ -328,7 +328,10 @@ public class WMSOSGridController {
             if(boundingBoxSizeInKm >= 1000 ) {
                 facets = new String[]{"grid_ref_100000"};
                 buff = 1.0;
-            } else if(boundingBoxSizeInKm > 78 && boundingBoxSizeInKm <1000 ){
+            } else if(boundingBoxSizeInKm > 156 && boundingBoxSizeInKm <1000 ){
+                facets = new String[]{"grid_ref_50000"};
+                buff = 0.75;
+            } else if(boundingBoxSizeInKm > 78 && boundingBoxSizeInKm <=156 ){
                 facets = new String[]{"grid_ref_10000"};
                 buff = 0.75;
             } else if(boundingBoxSizeInKm > 39 && boundingBoxSizeInKm <= 78) {
@@ -343,13 +346,46 @@ public class WMSOSGridController {
             }
         } else if ("10kgrid".equals(wmsEnv.gridres)){
             facets = new String[]{"grid_ref_10000"};
-            buff = 0.75; //no problems with buff 1.0
+            buff = 0.75;
+            //fixed_* used by EasyMap as of Nov 2019
+        } else if ("fixed_50km".equals(wmsEnv.gridres)) {
+            facets = new String[]{"grid_ref_10000","grid_ref_50000"}; //show 10km grid as well
+            buff = 0.75;
+        } else if ("fixed_10km".equals(wmsEnv.gridres)) {
+            facets = new String[]{"grid_ref_10000"};
+            buff = 0.75;
+        } else if ("fixed_2km".equals(wmsEnv.gridres)) {
+            facets = new String[]{"grid_ref_2000"};
+            buff = 0.05;
+        } else if ("fixed_100m".equals(wmsEnv.gridres)) {
+            facets = new String[]{"grid_ref_100"};
+            buff = 0.05;
+        } else if ("fixed_singlegrid".equals(wmsEnv.gridres)){ //to preserve legacy EasyMap display
+            if(boundingBoxSizeInKm >= 1000 ) {
+                facets = new String[]{"grid_ref_100000"};
+                buff = 1.0;
+            } else if(boundingBoxSizeInKm > 78 && boundingBoxSizeInKm < 1000 ){
+                facets = new String[]{"grid_ref_10000"};
+                buff = 0.75;
+            } else if(boundingBoxSizeInKm > 39 && boundingBoxSizeInKm <= 78) {
+                facets = new String[]{"grid_ref_2000"};
+                buff = 0.05;
+            } else if(boundingBoxSizeInKm > 8 && boundingBoxSizeInKm <= 39) {
+                facets = new String[]{"grid_ref_1000"};
+                buff = 0.05;
+            } else {
+                facets = new String[]{"grid_ref_100"};
+                buff = 0.05;
+            }
         } else {
             //variable grid
             if(boundingBoxSizeInKm >= 1000 ) {
                 facets = new String[]{"grid_ref_100000"};
                 buff = 1.0;
-            } else if(boundingBoxSizeInKm > 39 && boundingBoxSizeInKm < 1000 ){
+            } else if(boundingBoxSizeInKm > 156 && boundingBoxSizeInKm < 1000 ){
+                facets = new String[]{"grid_ref_10000", "grid_ref_50000"};
+                buff = 0.75;
+            } else if(boundingBoxSizeInKm > 39 && boundingBoxSizeInKm <= 156 ){
                 facets = new String[]{"grid_ref_10000"};
                 buff = 0.75;
             } else if(boundingBoxSizeInKm >= 19 && boundingBoxSizeInKm <= 39){
@@ -536,10 +572,13 @@ public class WMSOSGridController {
             color = wmsEnv.colour;
         } else {
             if(gridSize == 100000){
-                color = 0xFFFFFF00; //1km grids yellow
+                color = 0xFF03FFFB; //100km grids cyan
+            }
+            else if(gridSize == 50000){
+                color = 0xFFFF8D00; //50km grids orange
             }
             else if(gridSize == 10000){
-                color = 0xFFFFFF00; //1km grids yellow
+                color = 0xFFFFFF00; //10km grids yellow
             }
             else if(gridSize == 2000){
                 color = 0xFF0000FF; //blue
