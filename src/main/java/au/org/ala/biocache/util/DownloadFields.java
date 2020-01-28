@@ -177,7 +177,7 @@ public class DownloadFields {
                 field = indexByDwcMaps.get(indexName);
             }
 
-            if ((field != null && field.isStored()) || fieldName.startsWith("sensitive")) {
+            if ((field != null && field.isStored()) || fieldName.startsWith("sensitive") || fieldName.startsWith("highresolution")) {
 
                 String fieldNameToUse = field != null ? field.getName() : fieldName;
 

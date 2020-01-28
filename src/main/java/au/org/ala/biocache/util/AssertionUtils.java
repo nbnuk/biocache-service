@@ -43,13 +43,13 @@ public class AssertionUtils {
      * @return quality assertions
      */
     public List<QualityAssertion> getUserAssertions(String recordUuid) {
-        FullRecord[] fr = OccurrenceUtils.getAllVersionsByUuid(recordUuid, false);
+        FullRecord[] fr = OccurrenceUtils.getAllVersionsByUuid(recordUuid, false, false);
         OccurrenceDTO occ = new OccurrenceDTO(fr);
         return getUserAssertions(occ);
     }
 
     public ValidationRule[] getQueryAssertions(String recordUuid) {
-        FullRecord[] fr = OccurrenceUtils.getAllVersionsByUuid(recordUuid, false);
+        FullRecord[] fr = OccurrenceUtils.getAllVersionsByUuid(recordUuid, false, false);
 
         if(fr == null) {
             return null;
@@ -123,7 +123,7 @@ public class AssertionUtils {
     }
 
     public QualityAssertion enhanceQA(String recordUuid, QualityAssertion ua) {
-        FullRecord[] fr = OccurrenceUtils.getAllVersionsByUuid(recordUuid, false);
+        FullRecord[] fr = OccurrenceUtils.getAllVersionsByUuid(recordUuid, false, false);
         OccurrenceDTO occ = new OccurrenceDTO(fr);
         String email = ua.getUserEmail();
         ContactDTO contact = contactUtils.getContactForEmailAndUid(email, occ.getProcessed().getAttribution().getCollectionUid());

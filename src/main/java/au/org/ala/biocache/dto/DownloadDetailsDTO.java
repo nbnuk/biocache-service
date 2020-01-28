@@ -41,12 +41,14 @@ public class DownloadDetailsDTO {
     private DownloadRequestParams requestParams;
     private String fileLocation;
     private boolean includeSensitive = false;
+    private boolean includeHighResolution = false;
     private Map<String,String> headerMap = null;
     private String [] miscFields = null;
     /**
      * **MUST** be null if the user is not allowed to access sensitive fields.
      */
     private String sensitiveFq = null;
+    private String highResolutionFq = null;
     private AtomicBoolean interrupt = new AtomicBoolean(false);
     private String processingThreadName = null;
 
@@ -185,11 +187,23 @@ public class DownloadDetailsDTO {
     }
 
     /**
+     * @return the includeHighResolution
+     */
+    public boolean getIncludeHighResolution() {
+        return includeHighResolution;
+    }
+
+    /**
      * @param includeSensitive the includeSensitive to set
      */
     public void setIncludeSensitive(boolean includeSensitive) {
         this.includeSensitive = includeSensitive;
     }
+
+    /**
+     * @param includeHighResolution the includeHighResolution to set
+     */
+    public void setIncludeHighResolution(boolean includeHighResolution) { this.includeHighResolution = includeHighResolution; }
 
     /**
      * @param miscFields the miscFields to set
@@ -245,10 +259,27 @@ public class DownloadDetailsDTO {
     }
 
     /**
+     * This **MUST** be set to null if the user is not allowed to view high resolution fields.
+     * <br>
+     * Any non-null value could result in the user getting access to high resolution fields.
+     * @param highResolutionFq Null to disallow the user from getting access to high resolution fields, and a non-null string to give the user access.
+     */
+    public void setHighResolutionFq(String highResolutionFq) {
+        this.highResolutionFq = highResolutionFq;
+    }
+
+    /**
      * @return A non-null string if the user is allowed to view sensitive fields, and null otherwise.
      */
     public String getSensitiveFq() {
         return sensitiveFq;
+    }
+
+    /**
+     * @return A non-null string if the user is allowed to view high resolution fields, and null otherwise.
+     */
+    public String getHighResolutionFq() {
+        return highResolutionFq;
     }
 
     public void setInterrupt(AtomicBoolean interrupt) {

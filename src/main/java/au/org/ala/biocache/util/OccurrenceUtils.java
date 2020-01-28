@@ -33,8 +33,8 @@ public class OccurrenceUtils {
      * @param includeSensitive
      * @return quality assertions
      */
-    static public FullRecord[] getAllVersionsByUuid(String uuid, Boolean includeSensitive) {
-        FullRecord [] occ = Store.getAllVersionsByUuid(uuid, includeSensitive);
+    static public FullRecord[] getAllVersionsByUuid(String uuid, Boolean includeSensitive, Boolean includeHighResolution) {
+        FullRecord [] occ = Store.getAllVersionsByUuid(uuid, includeSensitive, includeHighResolution);
 
         if (occ != null) {
             for (FullRecord fr : occ) {

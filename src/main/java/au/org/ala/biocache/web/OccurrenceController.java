@@ -1474,10 +1474,32 @@ public class OccurrenceController extends AbstractSecureController {
         if(apiKey != null){
             return showSensitiveOccurrence(uuid, apiKey, ip, im, request, response);
         }
-        return getOccurrenceInformation(uuid, ip, im, request, false);
+        return getOccurrenceInformation(uuid, ip, im, request, false, false);
     }
-    
-    @RequestMapping(value = {"/sensitive/occurrence/{uuid:.+}","/sensitive/occurrences/{uuid:.+}", "/sensitive/occurrence/{uuid:.+}.json", "/senstive/occurrences/{uuid:.+}.json"}, method = RequestMethod.GET)
+
+    @RequestMapping(value = {"/occurrencelist/{uuids:.+}"}, method = RequestMethod.GET)
+    public @ResponseBody Object showOccurrenceList(@PathVariable("uuids") String uuids,
+                                                   @RequestParam(value="apiKey", required=false) String apiKey,
+                                                   @RequestParam(value="ip", required=false) String ip,
+                                                   @RequestParam(value="im", required=false) String im,
+                                               HttpServletRequest request, HttpServletResponse response) throws Exception {
+        afterInitialisation();
+        HashSet<Object> listOfOccs = new HashSet<Object>();
+        String[] arrUuids = uuids.split(",");
+        ip = ip == null?getIPAddress(request):ip;
+        if(apiKey != null){
+            for (String uuid : arrUuids) {
+                listOfOccs.add(showSensitiveOccurrence(uuid, apiKey, ip, im, request, response));
+            }
+        } else {
+            for (String uuid : arrUuids) {
+                listOfOccs.add(getOccurrenceInformation(uuid, ip, im, request, false, false));
+            }
+        }
+        return listOfOccs;
+    }
+
+    @RequestMapping(value = {"/sensitive/occurrence/{uuid:.+}","/sensitive/occurrences/{uuid:.+}", "/sensitive/occurrence/{uuid:.+}.json", "/sensitive/occurrences/{uuid:.+}.json"}, method = RequestMethod.GET)
     public @ResponseBody Object showSensitiveOccurrence(@PathVariable("uuid") String uuid,
                                                         @RequestParam(value="apiKey", required=true) String apiKey,
                                                         @RequestParam(value="ip", required=false) String ip,
@@ -1486,12 +1508,26 @@ public class OccurrenceController extends AbstractSecureController {
         afterInitialisation();
         ip = ip == null ? getIPAddress(request) : ip;
         if(shouldPerformOperation(apiKey, response)){
-            return getOccurrenceInformation(uuid, ip, im, request, true);
+            return getOccurrenceInformation(uuid, ip, im, request, true, false);
+        }
+        return null;
+    }
+
+    @RequestMapping(value = {"/highresolution/occurrence/{uuid:.+}","/highresolution/occurrences/{uuid:.+}", "/highresolution/occurrence/{uuid:.+}.json", "/highresolution/occurrences/{uuid:.+}.json"}, method = RequestMethod.GET)
+    public @ResponseBody Object showHighResolutionOccurrence(@PathVariable("uuid") String uuid,
+                                                        @RequestParam(value="apiKey", required=true) String apiKey,
+                                                        @RequestParam(value="ip", required=false) String ip,
+                                                        @RequestParam(value="im", required=false) String im,
+                                                        HttpServletRequest request, HttpServletResponse response) throws Exception {
+        afterInitialisation();
+        ip = ip == null ? getIPAddress(request) : ip;
+        if(shouldPerformOperation(apiKey, response)){
+            return getOccurrenceInformation(uuid, ip, im, request, false, true);
         }
         return null;
     }
     
-    private Object getOccurrenceInformation(String uuid, String ip, String im, HttpServletRequest request, boolean includeSensitive) throws Exception{
+    private Object getOccurrenceInformation(String uuid, String ip, String im, HttpServletRequest request, boolean includeSensitive, boolean includeHighResolution) throws Exception{
         logger.debug("Retrieving occurrence record with guid: '" + uuid + "'");
 
         if ("TRUE".equalsIgnoreCase(request.getParameter("solr"))) {
@@ -1579,7 +1615,7 @@ public class OccurrenceController extends AbstractSecureController {
 
             return result;
         } else {
-            FullRecord[] fullRecord = OccurrenceUtils.getAllVersionsByUuid(uuid, includeSensitive);
+            FullRecord[] fullRecord = OccurrenceUtils.getAllVersionsByUuid(uuid, includeSensitive, includeHighResolution);
             if (fullRecord == null) {
                 //get the rowKey for the supplied uuid in the index
                 //This is a workaround.  There seems to be an issue on Cassandra with retrieving uuids that start with e or f
@@ -1589,7 +1625,7 @@ public class OccurrenceController extends AbstractSecureController {
                 srp.setFacets(new String[]{});
                 SearchResultDTO results = occurrenceSearch(srp);
                 if (results.getTotalRecords() > 0) {
-                    fullRecord = OccurrenceUtils.getAllVersionsByUuid(results.getOccurrences().get(0).getUuid(), includeSensitive);
+                    fullRecord = OccurrenceUtils.getAllVersionsByUuid(results.getOccurrences().get(0).getUuid(), includeSensitive, includeHighResolution);
                 }
             }
 
@@ -1603,7 +1639,7 @@ public class OccurrenceController extends AbstractSecureController {
                 else if (result.getTotalRecords() == 0)
                     return new OccurrenceDTO();
                 else
-                    fullRecord = OccurrenceUtils.getAllVersionsByUuid(result.getOccurrences().get(0).getUuid(), includeSensitive);
+                    fullRecord = OccurrenceUtils.getAllVersionsByUuid(result.getOccurrences().get(0).getUuid(), includeSensitive, includeHighResolution);
             }
 
             OccurrenceDTO occ = new OccurrenceDTO(fullRecord);
