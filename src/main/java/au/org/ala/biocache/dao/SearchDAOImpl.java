@@ -109,18 +109,18 @@ public class SearchDAOImpl implements SearchDAO {
 
     //sensitive fields and their non-sensitive replacements
     private static final String[] sensitiveCassandraHdr = {"decimalLongitude", "decimalLatitude", "locality", "eventDate", "eventDateEnd", "gridReference", "coordinateUncertaintyInMeters"};
-    private static final String[] sensitiveSOLRHdr = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"}; // *** RR sensitive_coordinate_uncertainty
+    private static final String[] sensitiveSOLRHdr = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"};
 
     private static final String[] sensitiveCassandraHdr_NoDay = {"decimalLongitude", "decimalLatitude", "locality", "gridReference", "coordinateUncertaintyInMeters"};
-    private static final String[] sensitiveSOLRHdr_NoDay = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"}; // *** RR sensitive_coordinate_uncertainty
+    private static final String[] sensitiveSOLRHdr_NoDay = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"};
 
-    private static final String[] notSensitiveCassandraHdr = {"decimalLongitude_p", "decimalLatitude_p", "locality", "eventDate_p", "eventDateEnd_p", "gridReference", "coordinateUncertaintyInMeters_p"};
-    private static final String[] notSensitiveCassandraHdr_NoDay = {"decimalLongitude_p", "decimalLatitude_p", "locality", "gridReference", "coordinateUncertaintyInMeters_p"};
+    private static final String[] notSensitiveCassandraHdr = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"};
+    private static final String[] notSensitiveCassandraHdr_NoDay = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"};
 
     private static final String[] notSensitiveSOLRHdr = {"longitude", "latitude", "locality", "grid_reference", "coordinate_uncertainty"};
 
     private static final String[] highResolutionCassandraHdr = {"highResolutionDecimalLongitude_p", "highResolutionDecimalLatitude_p", "highResolutionLocality_p", "highResolutionGridReference_p", "highResolutionCoordinateUncertaintyInMeters_p"};
-    private static final String[] notHighResolutionCassandraHdr = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"}; //TODO fix
+    private static final String[] notHighResolutionCassandraHdr = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"}; //TODO: this is not a thing of beauty
 
     private static final String[] highResolutionSOLRHdr = {"highresolution_longitude", "highresolution_latitude", "highresolution_locality", "highresolution_grid_reference", "highresolution_coordinate_uncertainty"};
 
@@ -2370,7 +2370,7 @@ public class SearchDAOImpl implements SearchDAO {
             logger.info("whitelist fq = " + whitelistFq);
             sensitiveQ = splitQueries(queries, whitelistFq, null, null);
         }
-        //TODO ** check this **
+
         List<SolrQuery> highResolutionQ = new ArrayList<SolrQuery>();
         if (dd.getHighResolutionFq() != null && !hasWhitelistedHighResolutionRecords) {
             highResolutionQ = splitQueries(queries, dd.getHighResolutionFq(), null, null);
@@ -2530,7 +2530,45 @@ public class SearchDAOImpl implements SearchDAO {
                 }
 
                 String[] newMiscFields;
-                if (sensitiveQ.contains(q)) {
+
+                Boolean is_sensitive_set = false;
+                Boolean is_highResolution_set = false;
+                List<String> q_fqs = Arrays.asList(q.getFilterQueries());
+                for (SolrQuery sensitiveQitem : sensitiveQ) {
+                    List<String> sq_fqs = Arrays.asList(sensitiveQitem.getFilterQueries());
+                    Boolean maybe_match = true;
+                    for (String sq_fqs_item : sq_fqs) {
+                        if (!q_fqs.contains(sq_fqs_item)) {
+                            maybe_match = false; //all of its terms must be in q
+                        }
+                    }
+                    is_sensitive_set = (maybe_match || is_sensitive_set); //if its matched once that's good enough
+                }
+                for (SolrQuery highResolutionQitem : highResolutionQ) {
+                    List<String> sq_fqs = Arrays.asList(highResolutionQitem.getFilterQueries());
+                    Boolean maybe_match = true;
+                    for (String sq_fqs_item : sq_fqs) {
+                        if (!q_fqs.contains(sq_fqs_item)) {
+                            maybe_match = false;
+                        }
+                    }
+                    is_highResolution_set = (maybe_match || is_highResolution_set);
+                }
+                if (is_sensitive_set) {
+                    if (is_highResolution_set) {
+                        newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), (String[]) ArrayUtils.addAll(sensitiveFields,highResolutionFields), qaFields, true, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert, whitelistedLicenseAnnotation);
+                    } else {
+                        newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), (String[]) ArrayUtils.addAll(sensitiveFields,notHighResolutionFields), qaFields, true, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert, whitelistedLicenseAnnotation);
+                    }
+                } else {
+                    if (is_highResolution_set) {
+                        newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), (String[]) ArrayUtils.addAll(notSensitiveFields,highResolutionFields), qaFields, includeSensitive, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert);
+                    } else {
+                        newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), (String[]) ArrayUtils.addAll(notSensitiveFields,notHighResolutionFields), qaFields, includeSensitive, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert);
+                    }
+                }
+                /*
+                if (sensitiveQ.contains(q)) { //**** TODO fix ****
                     if (highResolutionQ.contains(q)) {
                         newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), (String[]) ArrayUtils.addAll(sensitiveFields,highResolutionFields), qaFields, true, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert, whitelistedLicenseAnnotation);
                     } else {
@@ -2543,7 +2581,7 @@ public class SearchDAOImpl implements SearchDAO {
                         newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), (String[]) ArrayUtils.addAll(notSensitiveFields,notHighResolutionFields), qaFields, includeSensitive, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert);
                     }
                 }
-
+                */
                 //test for errors
                 if (writer.hasError()) {
                     throw RecordWriterException.newRecordWriterException(dd, downloadParams, false, writer);
@@ -3684,7 +3722,7 @@ public class SearchDAOImpl implements SearchDAO {
         searchParams.setPageSize(0);
         SolrQuery facetQuery = initSolrQuery(searchParams, false, null);
         facetQuery.setQuery(queryString);
-        facetQuery.setFields(null);
+        facetQuery.setFields((java.lang.String[]) null);
         facetQuery.setRows(0);
         facetQuery.setFacetLimit(-1);
 
@@ -3733,7 +3771,7 @@ public class SearchDAOImpl implements SearchDAO {
             synchronized (solrIndexVersionLock) {
                 result = indexFields;
                 if (result.size() == 0 || update) {
-                    result = getIndexFieldDetails(null);
+                    result = getIndexFieldDetails((java.lang.String[]) null);
                     if (result != null && result.size() > 0) {
                         Map<String, IndexFieldDTO> resultMap = new HashMap<String, IndexFieldDTO>();
                         for (IndexFieldDTO field : result) {
@@ -4458,7 +4496,7 @@ public class SearchDAOImpl implements SearchDAO {
                     @Override
                     public void run() {
                         try {
-                            getIndexFieldDetails(null);
+                            getIndexFieldDetails((java.lang.String[]) null);
                         } catch (Exception e) {
                             logger.error("Failed to update solrIndexVersion", e);
                         }
@@ -4511,7 +4549,7 @@ public class SearchDAOImpl implements SearchDAO {
         //get facet group counts
         SolrQuery query = initSolrQuery(searchParams, false, null);
         query.setQuery(queryString);
-        query.setFields(null);
+        query.setFields((java.lang.String[]) null);
         //now use the supplied facets to add groups to the query
         query.add("group", "true");
         query.add("group.ngroups", "true");
@@ -4640,7 +4678,7 @@ public class SearchDAOImpl implements SearchDAO {
         //get facet group counts
         SolrQuery query = initSolrQuery(searchParams, false, null);
         query.setQuery(queryString);
-        query.setFields(null);
+        query.setFields((java.lang.String[]) null);
         //now use the supplied facets to add groups to the query
         query.add("facet.pivot", pivot);
         query.add("facet.pivot.mincount", "1");
@@ -4751,7 +4789,7 @@ public class SearchDAOImpl implements SearchDAO {
         //get facet group counts
         SolrQuery query = initSolrQuery(searchParams, false, null);
         query.setQuery(queryString);
-        query.setFields(null);
+        query.setFields((java.lang.String[]) null);
         //query.setFacetLimit(-1);
 
         //stats parameters
@@ -4799,7 +4837,7 @@ public class SearchDAOImpl implements SearchDAO {
         //get facet group counts
         SolrQuery query = initSolrQuery(searchParams, false, null);
         query.setQuery(queryString);
-        query.setFields(null);
+        query.setFields((java.lang.String[]) null);
         //query.setFacetLimit(-1);
 
         query.add("facet.pivot", pivot);
