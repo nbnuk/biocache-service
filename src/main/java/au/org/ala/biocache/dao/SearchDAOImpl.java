@@ -119,7 +119,7 @@ public class SearchDAOImpl implements SearchDAO {
 
     private static final String[] notSensitiveSOLRHdr = {"longitude", "latitude", "locality", "grid_reference", "coordinate_uncertainty"};
 
-    private static final String[] highResolutionCassandraHdr = {"highResolutionDecimalLongitude", "highResolutionDecimalLatitude", "highResolutionLocality", "highResolutionGridReference", "highResolutionCoordinateUncertaintyInMeters"};
+    private static final String[] highResolutionCassandraHdr = {"highResolutionDecimalLongitude_p", "highResolutionDecimalLatitude_p", "highResolutionLocality_p", "highResolutionGridReference_p", "highResolutionCoordinateUncertaintyInMeters_p"};
     private static final String[] notHighResolutionCassandraHdr = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"}; //TODO fix
 
     private static final String[] highResolutionSOLRHdr = {"highresolution_longitude", "highresolution_latitude", "highresolution_locality", "highresolution_grid_reference", "highresolution_coordinate_uncertainty"};
@@ -1168,8 +1168,6 @@ public class SearchDAOImpl implements SearchDAO {
             }
             if (hasWhitelistedHighResolutionRecords) {
                 //this is the SOLR download
-                //TODO: what about processed versions? they are not being indexed at this point - need to review
-                //requestedFieldsParam = requestedFieldsParam + "," + "highResolution,highResolutionDecimalLatitude,highResolutionDecimalLongitude,highResolutionCoordinateUncertaintyInMeters,highResolutionGridReference,highResolutionLocality";
                 requestedFieldsParam = requestedFieldsParam + "," + "highresolution,highresolution_latitude,highresolution_longitude,highresolution_coordinate_uncertainty,highresolution_grid_reference,highresolution_locality";
 
             }
