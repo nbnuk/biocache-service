@@ -2533,26 +2533,34 @@ public class SearchDAOImpl implements SearchDAO {
 
                 Boolean is_sensitive_set = false;
                 Boolean is_highResolution_set = false;
-                List<String> q_fqs = Arrays.asList(q.getFilterQueries());
-                for (SolrQuery sensitiveQitem : sensitiveQ) {
-                    List<String> sq_fqs = Arrays.asList(sensitiveQitem.getFilterQueries());
-                    Boolean maybe_match = true;
-                    for (String sq_fqs_item : sq_fqs) {
-                        if (!q_fqs.contains(sq_fqs_item)) {
-                            maybe_match = false; //all of its terms must be in q
+                if (q.getFilterQueries() != null) {
+                    List<String> q_fqs = Arrays.asList(q.getFilterQueries());
+                    for (SolrQuery sensitiveQitem : sensitiveQ) {
+                        Boolean maybe_match = false;
+                        if (sensitiveQitem.getFilterQueries() != null) {
+                            List<String> sq_fqs = Arrays.asList(sensitiveQitem.getFilterQueries());
+                            maybe_match = true;
+                            for (String sq_fqs_item : sq_fqs) {
+                                if (!q_fqs.contains(sq_fqs_item)) {
+                                    maybe_match = false; //all of its terms must be in q
+                                }
+                            }
                         }
+                        is_sensitive_set = (maybe_match || is_sensitive_set); //if its matched once that's good enough
                     }
-                    is_sensitive_set = (maybe_match || is_sensitive_set); //if its matched once that's good enough
-                }
-                for (SolrQuery highResolutionQitem : highResolutionQ) {
-                    List<String> sq_fqs = Arrays.asList(highResolutionQitem.getFilterQueries());
-                    Boolean maybe_match = true;
-                    for (String sq_fqs_item : sq_fqs) {
-                        if (!q_fqs.contains(sq_fqs_item)) {
-                            maybe_match = false;
+                    for (SolrQuery highResolutionQitem : highResolutionQ) {
+                        Boolean maybe_match = false;
+                        if (highResolutionQitem.getFilterQueries() != null) {
+                            List<String> sq_fqs = Arrays.asList(highResolutionQitem.getFilterQueries());
+                            maybe_match = true;
+                            for (String sq_fqs_item : sq_fqs) {
+                                if (!q_fqs.contains(sq_fqs_item)) {
+                                    maybe_match = false;
+                                }
+                            }
                         }
+                        is_highResolution_set = (maybe_match || is_highResolution_set);
                     }
-                    is_highResolution_set = (maybe_match || is_highResolution_set);
                 }
                 if (is_sensitive_set) {
                     if (is_highResolution_set) {
