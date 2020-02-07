@@ -72,7 +72,7 @@ public class OccurrenceIndex {
     @Field("longitude") Double decimalLongitude;
     @Field("coordinate_uncertainty") Double coordinateUncertaintyInMeters;
     @Field("highresolution") String highResolution;
-    @Field("highresolution_coordinate_uncertainty") String highResolutionCoordinateUncertaintyInMeters;
+    @Field("highresolution_coordinate_uncertainty") Double highResolutionCoordinateUncertaintyInMeters;
     @Field("year") Integer year;
     @Field("month") String month;
     @Field("basis_of_record") String basisOfRecord;
@@ -687,11 +687,11 @@ public class OccurrenceIndex {
         this.highResolution = highResolution;
     }
 
-    public String getHighResolutionCoordinateUncertaintyInMeters() {
+    public Double getHighResolutionCoordinateUncertaintyInMeters() {
         return highResolutionCoordinateUncertaintyInMeters;
     }
 
-    public void setHighResolutionCoordinateUncertaintyInMeters(String highResolutionCoordinateUncertaintyInMeters) {
+    public void setHighResolutionCoordinateUncertaintyInMeters(Double highResolutionCoordinateUncertaintyInMeters) {
         this.highResolutionCoordinateUncertaintyInMeters = highResolutionCoordinateUncertaintyInMeters;
     }
 

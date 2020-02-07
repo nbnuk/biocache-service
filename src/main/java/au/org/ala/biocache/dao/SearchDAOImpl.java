@@ -109,20 +109,20 @@ public class SearchDAOImpl implements SearchDAO {
 
     //sensitive fields and their non-sensitive replacements
     private static final String[] sensitiveCassandraHdr = {"decimalLongitude", "decimalLatitude", "locality", "eventDate", "eventDateEnd", "gridReference", "coordinateUncertaintyInMeters"};
-    private static final String[] sensitiveSOLRHdr = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"};
+    private static final String[] sensitiveSOLRHdr = {"sensitive", "sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"};
 
     private static final String[] sensitiveCassandraHdr_NoDay = {"decimalLongitude", "decimalLatitude", "locality", "gridReference", "coordinateUncertaintyInMeters"};
-    private static final String[] sensitiveSOLRHdr_NoDay = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"};
+    private static final String[] sensitiveSOLRHdr_NoDay = {"sensitive", "sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"};
 
     private static final String[] notSensitiveCassandraHdr = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"};
     private static final String[] notSensitiveCassandraHdr_NoDay = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"};
 
     private static final String[] notSensitiveSOLRHdr = {"longitude", "latitude", "locality", "grid_reference", "coordinate_uncertainty"};
 
-    private static final String[] highResolutionCassandraHdr = {"highResolutionDecimalLongitude_p", "highResolutionDecimalLatitude_p", "highResolutionLocality_p", "highResolutionGridReference_p", "highResolutionCoordinateUncertaintyInMeters_p"};
-    private static final String[] notHighResolutionCassandraHdr = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"}; //TODO: this is not a thing of beauty
+    private static final String[] highResolutionCassandraHdr = {"highresolution_p", "highResolutionDecimalLongitude_p", "highResolutionDecimalLatitude_p", "highResolutionLocality_p", "highResolutionGridReference_p", "highResolutionCoordinateUncertaintyInMeters_p"};
+    private static final String[] notHighResolutionCassandraHdr = {"highresolution_p", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"}; //TODO: this is not a thing of beauty
 
-    private static final String[] highResolutionSOLRHdr = {"highresolution_longitude", "highresolution_latitude", "highresolution_locality", "highresolution_grid_reference", "highresolution_coordinate_uncertainty"};
+    private static final String[] highResolutionSOLRHdr = {"highresolution", "highresolution_longitude", "highresolution_latitude", "highresolution_locality", "highresolution_grid_reference", "highresolution_coordinate_uncertainty"};
 
     /**
      * SOLR client instance
@@ -536,7 +536,7 @@ public class SearchDAOImpl implements SearchDAO {
                     field_one = "data_resource_uid";
                     field_many = "lsid";
                 }
-                for (Map.Entry<String, ArrayList> entry : dataResTaxa.entrySet()) {
+                for (Entry<String, ArrayList> entry : dataResTaxa.entrySet()) {
                     if (whitelist_fq.length() > 0) whitelist_fq += " OR ";
                     whitelist_fq += "(" + field_one + ":" + entry.getKey() + " AND (";
                     ArrayList<String> listDs = entry.getValue();
@@ -546,6 +546,29 @@ public class SearchDAOImpl implements SearchDAO {
                     }
                     whitelist_fq += "))";
                 }
+                Boolean isAdmin = false;
+                List<String> user_roles = (List<String>) user.get("roles");
+                if (user_roles != null) {
+                    if (user_roles.contains("ROLE_ADMIN")) isAdmin = true;
+                }
+                if (isAdmin) {
+
+                    if (type == "sensitive") {
+                        if (dd.getIncludeSensitive_admin_override_all()) {
+                            whitelist_fq = "sensitive:generalised";
+                        } else {
+                            whitelist_fq = "-sensitive:generalised"; //combined with actual_highres_or_sensitive_fq to return 0 records
+                        }
+                    } else {
+                        if (dd.getIncludeHighResolution_admin_override_all()) {
+                            whitelist_fq = "highresolution:true";
+                        } else {
+                            whitelist_fq = "-highresolution:true"; //combined with actual_highres_or_sensitive_fq to return 0 records
+                        }
+                    }
+                }
+
+
                 logger.info("whitelist_fq = " + whitelist_fq);
                 String actual_highres_or_sensitive_fq = "";
                 if (type == "sensitive") {
@@ -1134,11 +1157,11 @@ public class SearchDAOImpl implements SearchDAO {
             if (includeSensitive || hasWhitelistedSensitiveRecords ) {
                 //include raw latitude and longitudes
                 if (requestedFieldsParam.contains("decimalLatitude_p")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude_p", "sensitive_latitude,sensitive_longitude,decimalLatitude_p");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude_p", "sensitive,sensitive_latitude,sensitive_longitude,decimalLatitude_p");
                 } else if (requestedFieldsParam.contains("decimalLatitude")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude", "sensitive_latitude,sensitive_longitude,decimalLatitude");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude", "sensitive,sensitive_latitude,sensitive_longitude,decimalLatitude");
                 } else if (requestedFieldsParam.contains(",latitude,")) { //SOLR field
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",latitude,", ",sensitive_latitude,sensitive_longitude,latitude,");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",latitude,", ",sensitive,sensitive_latitude,sensitive_longitude,latitude,");
                 }
                 if (requestedFieldsParam.contains(",locality,")) {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality,", ",sensitive_locality,locality,");
@@ -1326,22 +1349,6 @@ public class SearchDAOImpl implements SearchDAO {
             } else {
                 sensitiveFields = new String[0];
                 notSensitiveFields = fields;
-            }
-
-            final String[] highResolutionFields;
-            if (dd.getHighResolutionFq() != null ) {
-                List<String>[] highResolutionHdr;
-
-                highResolutionHdr = downloadFields.getIndexFields(highResolutionSOLRHdr, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
-
-                //header for the output file
-                indexedFields[2].addAll(highResolutionHdr[2]);
-
-                //lookup for fields from sensitive queries
-                highResolutionFields = org.apache.commons.lang3.ArrayUtils.addAll(indexedFields[0].toArray(new String[]{}),
-                        highResolutionHdr[0].toArray(new String[]{}));
-            } else {
-                highResolutionFields = new String[0];
             }
 
 
@@ -1791,10 +1798,11 @@ public class SearchDAOImpl implements SearchDAO {
         int count = 0;
         int record = 0;
 
-        Integer drUid_index = 0, lsid_index = 0;
+        Integer drUid_index = 0, lsid_index = 0, sensitive_index = 0;
         for (int i = 0; i < fields.length; i++) {
             if (fields[i].equalsIgnoreCase("data_resource_uid")) drUid_index = i;
             if (fields[i].equalsIgnoreCase("taxon_concept_lsid"))lsid_index = i;
+            if (fields[i].equalsIgnoreCase("sensitive")) sensitive_index = i;
         }
 
         for (SolrDocument sd : qr.getResults()) {
@@ -1925,11 +1933,17 @@ public class SearchDAOImpl implements SearchDAO {
                     String lsid = values[lsid_index];
                     //logger.info("Checking record with lsid=" + lsid + " and dr = " + drUid);
                     Boolean isWhitelistedRec = false;
-                    if (whitelistDataResTaxa.containsKey(lsid)) {
-                        //logger.info("lsid is in whitelist");
-                        ArrayList<String> listDs = whitelistDataResTaxa.get(lsid);
-                        if (listDs.contains(drUid)) {
+                    if (dd.getIncludeSensitive_admin_override_all()) {
+                        if (values[sensitive_index].equalsIgnoreCase("generalised")) { //exclude alreadyGeneralised
                             isWhitelistedRec = true;
+                        }
+                    } else {
+                        if (whitelistDataResTaxa.containsKey(lsid)) {
+                            //logger.info("lsid is in whitelist");
+                            ArrayList<String> listDs = whitelistDataResTaxa.get(lsid);
+                            if (listDs.contains(drUid)) {
+                                isWhitelistedRec = true;
+                            }
                         }
                     }
                     if (!isWhitelistedRec) {
@@ -1954,7 +1968,7 @@ public class SearchDAOImpl implements SearchDAO {
                 }
 
                 //check if whitelisted high res: if not, then may need to remove values
-                if (hasWhitelistedHighResolutionRecords) {
+                if (hasWhitelistedHighResolutionRecords && !dd.getIncludeHighResolution_admin_override_all()) {
                     //check if data_resource_uid and lsid are in user's whitelist
 
                     String drUid = values[drUid_index];
@@ -2533,6 +2547,7 @@ public class SearchDAOImpl implements SearchDAO {
 
                 Boolean is_sensitive_set = false;
                 Boolean is_highResolution_set = false;
+
                 if (q.getFilterQueries() != null) {
                     List<String> q_fqs = Arrays.asList(q.getFilterQueries());
                     for (SolrQuery sensitiveQitem : sensitiveQ) {

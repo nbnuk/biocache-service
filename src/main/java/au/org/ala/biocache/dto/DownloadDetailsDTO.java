@@ -42,6 +42,8 @@ public class DownloadDetailsDTO {
     private String fileLocation;
     private boolean includeSensitive = false;
     private boolean includeHighResolution = false;
+    private boolean includeSensitive_admin_override_all = false; //admin role override to include all/none sensitive data fields in download
+    private boolean includeHighResolution_admin_override_all = false;
     private Map<String,String> headerMap = null;
     private String [] miscFields = null;
     /**
@@ -204,6 +206,32 @@ public class DownloadDetailsDTO {
      * @param includeHighResolution the includeHighResolution to set
      */
     public void setIncludeHighResolution(boolean includeHighResolution) { this.includeHighResolution = includeHighResolution; }
+
+    /**
+     * @return the includeSensitive_admin_override_all
+     */
+    public boolean getIncludeSensitive_admin_override_all() {
+        return includeSensitive_admin_override_all;
+    }
+
+    /**
+     * @return the includeHighResolution_admin_override_all
+     */
+    public boolean getIncludeHighResolution_admin_override_all() {
+        return includeHighResolution_admin_override_all;
+    }
+
+    /**
+     * @param includeSensitive_admin_override_all the includeSensitive_admin_override_all to set
+     */
+    public void setIncludeSensitive_admin_override_all(boolean includeSensitive_admin_override_all) {
+        this.includeSensitive_admin_override_all = includeSensitive_admin_override_all;
+    }
+
+    /**
+     * @param includeHighResolution_admin_override_all the includeHighResolution_admin_override_all to set
+     */
+    public void setIncludeHighResolution_admin_override_all(boolean includeHighResolution_admin_override_all) { this.includeHighResolution_admin_override_all = includeHighResolution_admin_override_all; }
 
     /**
      * @param miscFields the miscFields to set

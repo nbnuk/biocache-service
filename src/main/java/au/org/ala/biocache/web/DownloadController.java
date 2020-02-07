@@ -208,6 +208,9 @@ public class DownloadController extends AbstractSecureController {
         dd.setIncludeSensitive(includeSensitive);
         dd.setSensitiveFq(sensitiveFq);
 
+        dd.setIncludeSensitive_admin_override_all(requestParams.getIncludeSensitiveData());
+        dd.setIncludeHighResolution_admin_override_all(requestParams.getIncludeHighResolutionData());
+
         //get query (max) count for queue priority
         requestParams.setPageSize(0);
         requestParams.setFacet(false);
