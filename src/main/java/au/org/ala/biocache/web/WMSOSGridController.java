@@ -464,8 +464,20 @@ public class WMSOSGridController {
             public int compare(String o1, String o2) {
                 if(o1.length() > o2.length())
                     return 1;
-                if(o1.length() == o2.length())
-                    return 0;
+                if(o1.length() == o2.length()) {
+                    if ((o1.length() > 1) && (o2.length() > 1)) {
+                        int check_for_quads = o1.substring(o1.length() - 2).compareTo(o2.substring(o2.length() -2));
+                        if (check_for_quads > 0) {
+                            return -1;
+                        } else if (check_for_quads < 0) {
+                            return 1;
+                        } else {
+                            return 0;
+                        }
+                    } else {
+                        return 0;
+                    }
+                }
                 return -1;
             }
         });
