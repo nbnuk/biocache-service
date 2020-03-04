@@ -2581,10 +2581,10 @@ public class WMSController extends AbstractSecureController{
                         String url = bieWebService + "/search.json?q=" + query + "&fq=idxtype:REGIONFEATURED" + "&facets=point-0.0001&rows=0&flimit=-1";
                         if (filterQuery != null || filterQuery.length != 0) {
                             for (int j = 0; j < filterQuery.length; j++) {
-                                url = url + "&fq=" + filterQuery[j];
+                                url = url + "&fq=" + URLEncoder.encode(filterQuery[j], "UTF-8");
                             }
                         }
-                        url = url.replaceAll(" ","%20"); //TODO: what about other illegals chars
+
                         FacetField ff = getPlacesFacetField(url);
                         makePointsFromFacet(ff, pointsArrays, countsArrays);
                         logger.info("Place points made = " + pointsArrays.size());
@@ -2717,10 +2717,10 @@ public class WMSController extends AbstractSecureController{
                 String url = bieWebService + "/search.json?q=" + query + "&fq=idxtype:REGIONFEATURED" + "&facets=point-0.0001&rows=0&flimit=-1";
                 if (filterQuery != null || filterQuery.length != 0) {
                     for (int j = 0; j < filterQuery.length; j++) {
-                        url = url + "&fq=" + filterQuery[j];
+                        url = url + "&fq=" + URLEncoder.encode(filterQuery[j], "UTF-8");
                     }
                 }
-                url = url.replaceAll(" ","%20"); //TODO: what about other illegals chars
+
                 FacetField ff = getPlacesFacetField(url);
                 makePointsFromFacet(ff, pointsArrays, countsArrays);
                 logger.info("Place points made = " + pointsArrays.size());
