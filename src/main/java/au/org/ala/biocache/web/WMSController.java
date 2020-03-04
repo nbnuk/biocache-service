@@ -1701,7 +1701,7 @@ public class WMSController extends AbstractSecureController{
 
         //get from cache, or make it
         boolean canCache = wmsCache.isEnabled() && cache.equalsIgnoreCase("on");
-        //canCache = false; //for testing
+        canCache = false; //for testing
         WMSTile wco = getWMSCacheObject(requestParams, vars, pointType, bbox, originalFqs, boundingBoxFqs, canCache, true);
 
         //correction for gridDivisionCount
@@ -2458,10 +2458,10 @@ public class WMSController extends AbstractSecureController{
                 String[] filterQuery = ArrayUtils.removeElement(requestParams.getFq(),"geospatial_kosher:true");
                 String query = requestParams.getQ();
                 if (docCount) {
-                    String url = bieWebService + "/search.json?q=" + query + "&fq=idxtype:REGIONFEATURED" + "&rows=1";
+                    String url = bieWebService + "/search.json?q=" + URLEncoder.encode(query, "UTF-8") + "&fq=idxtype:REGIONFEATURED" + "&rows=1";
                     if (filterQuery != null || filterQuery.length != 0) {
                         for (int i = 0; i < filterQuery.length; i++) {
-                            url = url + "&fq=" + filterQuery[i];
+                            url = url + "&fq=" + URLEncoder.encode(filterQuery[i], "UTF-8");
                         }
                     }
                     ObjectMapper om = new ObjectMapper();
@@ -2577,7 +2577,7 @@ public class WMSController extends AbstractSecureController{
                     } else {
                         String[] filterQuery = ArrayUtils.removeElement(requestParams.getFq(),"geospatial_kosher:true");
                         String query = requestParams.getQ();
-                        String url = bieWebService + "/search.json?q=" + query + "&fq=idxtype:REGIONFEATURED" + "&facets=point-0.0001&rows=0&flimit=-1";
+                        String url = bieWebService + "/search.json?q=" + URLEncoder.encode(query, "UTF-8") + "&fq=idxtype:REGIONFEATURED" + "&facets=point-0.0001&rows=0&flimit=-1";
                         if (filterQuery != null || filterQuery.length != 0) {
                             for (int j = 0; j < filterQuery.length; j++) {
                                 url = url + "&fq=" + URLEncoder.encode(filterQuery[j], "UTF-8");
@@ -2713,7 +2713,7 @@ public class WMSController extends AbstractSecureController{
             } else {
                 String[] filterQuery = ArrayUtils.removeElement(requestParams.getFq(),"geospatial_kosher:true");
                 String query = requestParams.getQ();
-                String url = bieWebService + "/search.json?q=" + query + "&fq=idxtype:REGIONFEATURED" + "&facets=point-0.0001&rows=0&flimit=-1";
+                String url = bieWebService + "/search.json?q=" + URLEncoder.encode(query, "UTF-8") + "&fq=idxtype:REGIONFEATURED" + "&facets=point-0.0001&rows=0&flimit=-1";
                 if (filterQuery != null || filterQuery.length != 0) {
                     for (int j = 0; j < filterQuery.length; j++) {
                         url = url + "&fq=" + URLEncoder.encode(filterQuery[j], "UTF-8");
