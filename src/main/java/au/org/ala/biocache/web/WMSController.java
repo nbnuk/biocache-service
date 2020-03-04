@@ -1549,7 +1549,7 @@ public class WMSController extends AbstractSecureController{
 
         //get from cache, or make it
         boolean canCache = wmsCache.isEnabled() && cache.equalsIgnoreCase("on");
-        canCache = false; //TODO testing ***
+        //canCache = false; - for testing
         WMSTile wco = getWMSCacheObject(requestParams, vars, pointType, bbox, originalFqs, boundingBoxFqs, canCache);
 
         //correction for gridDivisionCount
@@ -1701,8 +1701,8 @@ public class WMSController extends AbstractSecureController{
 
         //get from cache, or make it
         boolean canCache = wmsCache.isEnabled() && cache.equalsIgnoreCase("on");
-        canCache = false; //TODO testing
-        WMSTile wco = getWMSCacheObject(requestParams, vars, pointType, bbox, originalFqs, boundingBoxFqs, canCache, true); //TODO
+        //canCache = false; //for testing
+        WMSTile wco = getWMSCacheObject(requestParams, vars, pointType, bbox, originalFqs, boundingBoxFqs, canCache, true);
 
         //correction for gridDivisionCount
         boolean isGrid = vars.colourMode.equals("grid");
@@ -1718,7 +1718,7 @@ public class WMSController extends AbstractSecureController{
 
         ImgObj imgObj = wco.getPoints() == null ? null : wmsCached(wco, requestParams, vars, pointType, pbbox, bbox, mbbox,
                 width, height, width_mult, height_mult, pointWidth,
-                originalFqs, hq, boundingBoxFqs, outlinePoints, outlineColour, response, is4326, tilebbox, gridDivisionCount); //TODO
+                originalFqs, hq, boundingBoxFqs, outlinePoints, outlineColour, response, is4326, tilebbox, gridDivisionCount);
 
         if (imgObj != null && imgObj.g != null) {
             imgObj.g.dispose();
@@ -1875,7 +1875,6 @@ public class WMSController extends AbstractSecureController{
 
         BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D combined = (Graphics2D) img.getGraphics();
-        logger.info("here***");
         combined.drawImage(basemapImage, 0, 0, Color.WHITE, null);
         //combined.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, pointOpacity.floatValue()));
         combined.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
@@ -2315,7 +2314,7 @@ public class WMSController extends AbstractSecureController{
 
                 //use bbox when too many points
                 if (pointsCount != null && pointsCount > wmsCacheMaxLayerPoints) {
-                    q += StringUtils.join(origAndBBoxFqs, ","); //TODO hmmm
+                    q += StringUtils.join(origAndBBoxFqs, ","); //TODO investigate this
 
                     requestParams.setFq(origAndBBoxFqs);
                     count = getCachedCount(true, requestParams, q, pointType, useBbox, queryPlaces);
@@ -2396,7 +2395,7 @@ public class WMSController extends AbstractSecureController{
                 List<int[]> countsArrays = cm.equals("-1") ? new ArrayList<int[]>(sz) : null;
 
                 queryTile(requestParams, vars, pointType, countsArrays, pointsArrays, colours, pColour,
-                        bbox, originalFqs, boundingBoxFqs, canCache, count, queryPlaces); //TODO
+                        bbox, originalFqs, boundingBoxFqs, canCache, count, queryPlaces); //TODO investigate
 
                 wco.setBbox(bbox);
                 wco.setColourmode(vars.colourMode);
@@ -2475,10 +2474,10 @@ public class WMSController extends AbstractSecureController{
                         }
                     }
                 } else {
-                    //hmmm?
+                    //TODO not sure
                 }
             } else {
-                //hmmm?
+                //TODO not sure
             }
         }
         return count;
