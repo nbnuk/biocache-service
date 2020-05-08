@@ -1855,7 +1855,7 @@ public class SearchDAOImpl implements SearchDAO {
                         for (int i = 0; i < fields.length; i++) {
                             if (fields[i].equals("license") || fields[i].equals("license_p")) {
                                 if (values[i] != null && !values[i].isEmpty()) {
-                                    values[i] = values[i] + " - " + explainWhitelistedLicense;
+                                    values[i] = /* values[i] + " - " + */ explainWhitelistedLicense;
                                 }
                             }
                         }

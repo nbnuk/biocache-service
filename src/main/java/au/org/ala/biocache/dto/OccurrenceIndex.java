@@ -123,6 +123,8 @@ public class OccurrenceIndex {
     @Field("photographer_s") String photographer;
     @Field("grid_ref") String gridReference;
     @Field("location_id") String locationId;
+    @Field("raw_taxon_id") String raw_taxonId;
+    @Field("raw_sampling_protocol") String raw_samplingProtocol;
     @Field("*_s") Map<String, Object> miscStringProperties;
     @Field("*_i") Map<String, Object> miscIntProperties;
     @Field("*_d") Map<String, Object> miscDoubleProperties;
@@ -291,6 +293,8 @@ public class OccurrenceIndex {
         addToMapIfNotNull(map, "grid_ref", gridReference);
         addToMapIfNotNull(map, "location_id", locationId);
         addToMapIfNotNull(map, "identification_verification_status", identificationVerificationStatus);
+        addToMapIfNotNull(map, "raw_taxon_id", raw_taxonId);
+        addToMapIfNotNull(map, "raw_sampling_protocol", raw_samplingProtocol);
         return map;
     }
 
@@ -375,6 +379,8 @@ public class OccurrenceIndex {
         map.put("license", "license");
         map.put("grid_ref", "gridReference");
         map.put("location_id", "locationId");
+        map.put("raw_taxon_id", "raw_taxonId");
+        map.put("raw_sampling_protocol", "raw_samplingProtocol");
         return map;
     }
 
@@ -1130,4 +1136,19 @@ public class OccurrenceIndex {
         this.identificationVerificationStatus = identificationVerificationStatus;
     }
 
+    public String getRaw_taxonId() {
+        return raw_taxonId;
+    }
+
+    public void setRaw_taxonId(String raw_taxonId) {
+        this.raw_taxonId = raw_taxonId;
+    }
+
+    public String getRaw_samplingProtocol() {
+        return raw_samplingProtocol;
+    }
+
+    public void setRaw_samplingProtocol(String raw_samplingProtocol) {
+        this.raw_samplingProtocol = raw_samplingProtocol;
+    }
 }
