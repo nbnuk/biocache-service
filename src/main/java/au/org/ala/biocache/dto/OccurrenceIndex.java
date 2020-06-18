@@ -71,6 +71,7 @@ public class OccurrenceIndex {
     @Field("latitude") Double decimalLatitude;
     @Field("longitude") Double decimalLongitude;
     @Field("coordinate_uncertainty") Double coordinateUncertaintyInMeters;
+    @Field("grid_size") Integer gridSizeInMeters;
     @Field("year") Integer year;
     @Field("month") String month;
     @Field("basis_of_record") String basisOfRecord;
@@ -682,6 +683,14 @@ public class OccurrenceIndex {
 
     public void setCoordinateUncertaintyInMeters(Double coordinateUncertaintyInMeters) {
         this.coordinateUncertaintyInMeters = coordinateUncertaintyInMeters;
+    }
+
+    public Integer getGridSizeInMeters() {
+        return gridSizeInMeters;
+    }
+
+    public void setGridSizeInMeters(Integer gridSizeInMeters) {
+        this.gridSizeInMeters = gridSizeInMeters;
     }
 
     public Integer getYear() {
