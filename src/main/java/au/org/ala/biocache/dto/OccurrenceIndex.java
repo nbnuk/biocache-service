@@ -72,6 +72,8 @@ public class OccurrenceIndex {
     @Field("longitude") Double decimalLongitude;
     @Field("coordinate_uncertainty") Double coordinateUncertaintyInMeters;
     @Field("grid_size") Integer gridSizeInMeters;
+    @Field("highresolution") String highResolution;
+    @Field("highresolution_coordinate_uncertainty") Double highResolutionCoordinateUncertaintyInMeters;
     @Field("year") Integer year;
     @Field("month") String month;
     @Field("basis_of_record") String basisOfRecord;
@@ -250,7 +252,8 @@ public class OccurrenceIndex {
         addToMapIfNotNull(map, "subspecies_guid", subspeciesGuid);
         addToMapIfNotNull(map, "state", stateProvince); 
         addToMapIfNotNull(map, "latitude", safeDblToString(decimalLatitude));
-        addToMapIfNotNull(map, "longitude", safeDblToString(decimalLongitude)); 
+        addToMapIfNotNull(map, "longitude", safeDblToString(decimalLongitude));
+        addToMapIfNotNull(map, "highresolution", highResolution);
         addToMapIfNotNull(map, "year", safeIntToString(year));
         addToMapIfNotNull(map, "month", month); 
         addToMapIfNotNull(map, "basis_of_record", basisOfRecord);
@@ -338,6 +341,7 @@ public class OccurrenceIndex {
         map.put("state", "stateProvince");
         map.put("latitude", "decimalLatitude");
         map.put("longitude", "decimalLongitude");
+        map.put("highresolution", "highResolution");
         map.put("year", "year");
         map.put("month","month");
         map.put("basis_of_record", "basisOfRecord");
@@ -691,6 +695,22 @@ public class OccurrenceIndex {
 
     public void setGridSizeInMeters(Integer gridSizeInMeters) {
         this.gridSizeInMeters = gridSizeInMeters;
+    }
+
+    public String getHighResolution() {
+        return highResolution;
+    }
+
+    public void setHighResolution(String highResolution) {
+        this.highResolution = highResolution;
+    }
+
+    public Double getHighResolutionCoordinateUncertaintyInMeters() {
+        return highResolutionCoordinateUncertaintyInMeters;
+    }
+
+    public void setHighResolutionCoordinateUncertaintyInMeters(Double highResolutionCoordinateUncertaintyInMeters) {
+        this.highResolutionCoordinateUncertaintyInMeters = highResolutionCoordinateUncertaintyInMeters;
     }
 
     public Integer getYear() {
