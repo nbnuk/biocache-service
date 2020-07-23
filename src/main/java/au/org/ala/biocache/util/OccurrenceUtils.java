@@ -76,19 +76,16 @@ public class OccurrenceUtils {
                             if (valRaw.isDefined()) {
                                 if (valRaw.get().equals(valSensitive)) {
                                     isProcessed = false;
-                                    break;
+                                    loc.setProperty(keyRaw,"");
                                 }
                             }
                         }
                     }
+                    if (!isProcessed) occ[0].setLocation(loc);
                 }
             }
         }
-        if (isProcessed) {
-            return occ;
-        } else {
-            return null;
-        }
+        return occ;
     }
 
     public static Map getComparisonByUuid(String uuid) {
