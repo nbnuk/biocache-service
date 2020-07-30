@@ -556,7 +556,7 @@ public class WMSOSGridController {
 
         int easting = gr.easting();
         int northing = gr.northing();
-        int gridSize = (Integer) gr.coordinateUncertainty().get();
+        int gridSize = (Integer) gr.gridSize().get();
 
         //coordinates in easting / northing of the nearest 10km grid to the bottom,left of this tile
         Integer minEastingOfGridCell  = easting; //may need to use the minimum of each

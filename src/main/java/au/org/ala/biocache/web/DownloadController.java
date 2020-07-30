@@ -21,6 +21,7 @@ import au.org.ala.biocache.dao.SearchDAO;
 import au.org.ala.biocache.dto.DownloadDetailsDTO;
 import au.org.ala.biocache.dto.DownloadRequestParams;
 import au.org.ala.biocache.dto.IndexFieldDTO;
+import au.org.ala.biocache.dto.SpatialSearchRequestParams;
 import au.org.ala.biocache.service.AuthService;
 import au.org.ala.biocache.service.DownloadService;
 import net.sf.json.JSONArray;
@@ -28,6 +29,7 @@ import net.sf.json.JsonConfig;
 import net.sf.json.util.PropertyFilter;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.http.NameValuePair;
 import org.apache.log4j.Logger;
 import org.apache.solr.common.SolrDocumentList;
 import org.json.simple.JSONObject;
@@ -42,9 +44,14 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.stream.Collectors;
+
+import org.apache.http.client.utils.URLEncodedUtils;
+
 
 /**
  * A Controller for downloading records based on queries.  This controller
@@ -223,6 +230,45 @@ public class DownloadController extends AbstractSecureController {
             status.put("status", "inQueue");
             status.put("queueSize", persistentQueueDAO.getTotalDownloads());
             status.put("statusUrl", downloadService.webservicesRoot + "/occurrences/offline/status/" + dd.getUniqueId());
+        } else if (requestParams.getFileType().equalsIgnoreCase("map")) {
+            File file = new File(downloadService.biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + "map");
+            FileUtils.forceMkdir(file.getParentFile());
+            FileUtils.writeStringToFile(file, "", "UTF-8");
+            status.put("downloadUrl", downloadService.biocacheDownloadUrl);
+            status.put("status", "skipped"); // TODO
+            status.put("message", "Map"); //TODO
+            String mapParams = requestParams.getMapLayoutParams();
+
+            List<NameValuePair> listParams = URLEncodedUtils.parse(new URI("http://ignore.com?" + mapParams), "UTF-8");
+            Map<String, String> mappedParams = listParams.stream().collect(
+                    Collectors.toMap(NameValuePair::getName, NameValuePair::getValue));
+
+            WMSController wmsController = new WMSController();
+            SpatialSearchRequestParams spatialParams = new SpatialSearchRequestParams();
+            if (mappedParams.containsKey("wkt")) spatialParams.setWkt(mappedParams.get("wkt"));
+            if (mappedParams.containsKey("lat")) spatialParams.setLat(Float.parseFloat(mappedParams.get("lat")));
+            if (mappedParams.containsKey("lon")) spatialParams.setLon(Float.parseFloat(mappedParams.get("lon")));
+            if (mappedParams.containsKey("radius")) spatialParams.setRadius(Float.parseFloat(mappedParams.get("radius")));
+
+            String extents = mappedParams.get("extents");
+            String format = mappedParams.get("format");
+            Double widthmm = (mappedParams.get("widthmm") == null? null : Double.parseDouble(mappedParams.get("widthmm")));
+            Double pradiusmm = (mappedParams.get("pradiusmm") == null? null : Double.parseDouble(mappedParams.get("pradiusmm")));
+            Integer pradiuspx = (mappedParams.get("pradiuspx") == null? null : Integer.parseInt(mappedParams.get("pradiuspx")));
+            String pcolour = mappedParams.get("pcolour");
+            String env = mappedParams.get("env");
+            String srs = mappedParams.get("srs");
+            Double popacity = (mappedParams.get("popacity") == null? null : Double.parseDouble(mappedParams.get("popacity")));
+            String baselayer = mappedParams.get("baselayer");
+            String scale = mappedParams.get("scale");
+            Integer dpi = (mappedParams.get("dpi") == null? null : Integer.parseInt(mappedParams.get("dpi")));
+            String baselayerStyle = mappedParams.get("baselayerStyle");
+            String outline = mappedParams.get("outline");
+            String outlineColour = mappedParams.get("outlineColour");
+            String fileName = requestParams.getFile() + '.' + mappedParams.get("format");
+            String baseMap = mappedParams.get("baseMap");
+            //TODO create new generatePublicationMap that does not needs request/response objects and saves image to given path
+            //wmsController.generatePublicationMap(spatialParams, format, extents, widthmm,pradiusmm,pradiuspx,pcolour,env,srs,popacity,baselayer,scale,dpi,baselayerStyle,outline,outlineColour,fileName,baseMap);
         } else if (dd.getTotalRecords() > downloadService.dowloadOfflineMaxSize) {
             //identify this download as too large
             File file = new File(downloadService.biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + "tooLarge");
