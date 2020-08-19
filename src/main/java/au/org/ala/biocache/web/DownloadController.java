@@ -35,19 +35,25 @@ import org.apache.solr.common.SolrDocumentList;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
+import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import org.apache.http.client.utils.URLEncodedUtils;
@@ -233,42 +239,22 @@ public class DownloadController extends AbstractSecureController {
         } else if (requestParams.getFileType().equalsIgnoreCase("map")) {
             File file = new File(downloadService.biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + "map");
             FileUtils.forceMkdir(file.getParentFile());
-            FileUtils.writeStringToFile(file, "", "UTF-8");
             status.put("downloadUrl", downloadService.biocacheDownloadUrl);
-            status.put("status", "skipped"); // TODO
-            status.put("message", "Map"); //TODO
-            String mapParams = requestParams.getMapLayoutParams();
+            status.put("status", "running");
+            status.put("message", "Map");
+            boolean imgOk = downloadService.createMapImage(requestParams, request, dd);
+            if (!imgOk) {
+                status.put("status", "failed");
+                status.put("message", "Failed to create map image.");
+                status.put("error", "Failed to create map image.");
+            } else {
 
-            List<NameValuePair> listParams = URLEncodedUtils.parse(new URI("http://ignore.com?" + mapParams), "UTF-8");
-            Map<String, String> mappedParams = listParams.stream().collect(
-                    Collectors.toMap(NameValuePair::getName, NameValuePair::getValue));
-
-            WMSController wmsController = new WMSController();
-            SpatialSearchRequestParams spatialParams = new SpatialSearchRequestParams();
-            if (mappedParams.containsKey("wkt")) spatialParams.setWkt(mappedParams.get("wkt"));
-            if (mappedParams.containsKey("lat")) spatialParams.setLat(Float.parseFloat(mappedParams.get("lat")));
-            if (mappedParams.containsKey("lon")) spatialParams.setLon(Float.parseFloat(mappedParams.get("lon")));
-            if (mappedParams.containsKey("radius")) spatialParams.setRadius(Float.parseFloat(mappedParams.get("radius")));
-
-            String extents = mappedParams.get("extents");
-            String format = mappedParams.get("format");
-            Double widthmm = (mappedParams.get("widthmm") == null? null : Double.parseDouble(mappedParams.get("widthmm")));
-            Double pradiusmm = (mappedParams.get("pradiusmm") == null? null : Double.parseDouble(mappedParams.get("pradiusmm")));
-            Integer pradiuspx = (mappedParams.get("pradiuspx") == null? null : Integer.parseInt(mappedParams.get("pradiuspx")));
-            String pcolour = mappedParams.get("pcolour");
-            String env = mappedParams.get("env");
-            String srs = mappedParams.get("srs");
-            Double popacity = (mappedParams.get("popacity") == null? null : Double.parseDouble(mappedParams.get("popacity")));
-            String baselayer = mappedParams.get("baselayer");
-            String scale = mappedParams.get("scale");
-            Integer dpi = (mappedParams.get("dpi") == null? null : Integer.parseInt(mappedParams.get("dpi")));
-            String baselayerStyle = mappedParams.get("baselayerStyle");
-            String outline = mappedParams.get("outline");
-            String outlineColour = mappedParams.get("outlineColour");
-            String fileName = requestParams.getFile() + '.' + mappedParams.get("format");
-            String baseMap = mappedParams.get("baseMap");
-            //TODO create new generatePublicationMap that does not needs request/response objects and saves image to given path
-            //wmsController.generatePublicationMap(spatialParams, format, extents, widthmm,pradiusmm,pradiuspx,pcolour,env,srs,popacity,baselayer,scale,dpi,baselayerStyle,outline,outlineColour,fileName,baseMap);
+                //hook into normal download process to generate citations.csv and readme.html files and zip everything.
+                persistentQueueDAO.addDownloadToQueue(dd);
+                status.put("status", "finished");
+                status.put("queueSize", persistentQueueDAO.getTotalDownloads());
+                status.put("statusUrl", downloadService.webservicesRoot + "/occurrences/offline/status/" + dd.getUniqueId());
+            }
         } else if (dd.getTotalRecords() > downloadService.dowloadOfflineMaxSize) {
             //identify this download as too large
             File file = new File(downloadService.biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + "tooLarge");

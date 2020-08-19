@@ -18,15 +18,13 @@ import au.com.bytecode.opencsv.CSVReader;
 import au.com.bytecode.opencsv.CSVWriter;
 import au.org.ala.biocache.dao.PersistentQueueDAO;
 import au.org.ala.biocache.dao.SearchDAO;
-import au.org.ala.biocache.dto.DownloadDetailsDTO;
+import au.org.ala.biocache.dto.*;
 import au.org.ala.biocache.dto.DownloadDetailsDTO.DownloadType;
-import au.org.ala.biocache.dto.DownloadDoiDTO;
-import au.org.ala.biocache.dto.DownloadRequestParams;
-import au.org.ala.biocache.dto.IndexFieldDTO;
 import au.org.ala.biocache.stream.OptionalZipOutputStream;
 import au.org.ala.biocache.util.AlaFileUtils;
 import au.org.ala.biocache.util.thread.DownloadControlThread;
 import au.org.ala.biocache.util.thread.DownloadCreator;
+import au.org.ala.biocache.web.WMSController;
 import au.org.ala.biocache.writer.RecordWriterException;
 import au.org.ala.doi.CreateDoiResponse;
 import com.google.common.collect.Lists;
@@ -38,6 +36,8 @@ import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.output.CloseShieldOutputStream;
 import org.apache.commons.lang.StringUtils;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -52,15 +52,25 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestOperations;
 
 import javax.annotation.PostConstruct;
+import javax.imageio.ImageIO;
 import javax.inject.Inject;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.*;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+import static org.apache.commons.io.FilenameUtils.removeExtension;
 
 /**
  * Services to perform the downloads.
@@ -242,6 +252,12 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
 
     @Value("${download.offline.msg:This download is unavailable. Run the download again.}")
     public String downloadOfflineMsgDeleted = "This download is unavailable. Run the download again.";
+
+    @Value("${wms.image.pixel.count:36000000}")
+    private int MAX_IMAGE_PIXEL_COUNT; //this is slightly larger than 600dpi A4
+
+    @Value("${geoserver.url:http://spatial.ala.org.au/geoserver}")
+    protected String geoserverUrl;
 
     /**
      * Ensures closure is only attempted once.
@@ -544,23 +560,33 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
         try(OptionalZipOutputStream sp = new OptionalZipOutputStream(
                 zip ? OptionalZipOutputStream.Type.zipped : OptionalZipOutputStream.Type.unzipped, new CloseShieldOutputStream(out), maxMB);) {
             String suffix = requestParams.getFileType().equals("shp") ? "csv" : requestParams.getFileType();
-            sp.putNextEntry(filename + "." + suffix);
-            // put the facets
-            if ("all".equals(requestParams.getQa())) {
-                requestParams.setFacets(new String[] { "assertions", "data_resource_uid" });
-            } else {
-                requestParams.setFacets(new String[] { "data_resource_uid" });
+            if (!requestParams.getFileType().equals("map")) {
+                sp.putNextEntry(filename + "." + suffix);
+                // put the facets
+                if ("all".equals(requestParams.getQa())) {
+                    requestParams.setFacets(new String[]{"assertions", "data_resource_uid"});
+                } else {
+                    requestParams.setFacets(new String[]{"data_resource_uid"});
+                }
             }
             
             final ConcurrentMap<String, AtomicInteger> uidStats;
 
-            if (fromIndex) {
-                uidStats = searchDAO.writeResultsFromIndexToStream(requestParams, sp, includeSensitive, dd, limit, parallelExecutor);
+            if (!requestParams.getFileType().equals("map")) {
+                if (fromIndex) {
+                    uidStats = searchDAO.writeResultsFromIndexToStream(requestParams, sp, includeSensitive, dd, limit, parallelExecutor);
+                } else {
+                    uidStats = searchDAO.writeResultsToStream(requestParams, sp, 100, includeSensitive, dd, limit);
+                }
+                sp.closeEntry();
             } else {
-                uidStats = searchDAO.writeResultsToStream(requestParams, sp, 100, includeSensitive, dd, limit);
+                SpatialSearchRequestParams searchParams = requestParams;
+                Map<String, Integer> sources = searchDAO.getSourcesForQuery(requestParams);
+                uidStats = new ConcurrentHashMap<>();
+                for (Map.Entry<String, Integer> entry : sources.entrySet()) {
+                    uidStats.put(entry.getKey(), new AtomicInteger(entry.getValue()));
+                }
             }
-
-            sp.closeEntry();
 
             // add the readme for the Shape file header mappings if necessary
             if (dd.getHeaderMap() != null) {
@@ -657,6 +683,30 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                         logger.debug("Not adding citation. Enabled: " + citationsEnabled + " uids: " + uidStats);
                     }
                 }
+                if (requestParams.getFileType().equals("map")) {
+                    try {
+                        String mapParams = requestParams.getMapLayoutParams();
+                        List<NameValuePair> listParams = URLEncodedUtils.parse(new URI("http://ignore.com?" + mapParams), "UTF-8");
+                        Map<String, String> mappedParams = listParams.stream().collect(
+                                Collectors.toMap(NameValuePair::getName, NameValuePair::getValue));
+                        String pathWithoutExtension = removeExtension(dd.getFileLocation());
+                        String mapImgSourcePath =  pathWithoutExtension + "." + mappedParams.get("format");
+                        File file = new File(mapImgSourcePath);
+                        FileInputStream fis = new FileInputStream(file);
+                        String mapImgPath =  filename + "." + mappedParams.get("format");
+                        sp.putNextEntry(mapImgPath);
+                        byte[] bytes = new byte[1024];
+                        int length;
+                        while ((length = fis.read(bytes)) >= 0) {
+                            sp.write(bytes, 0, length);
+                        }
+                        fis.close();
+                        file.delete(); //tidy up original map image file
+                    } catch (IOException e) {
+                        logger.error(e.getMessage(), e);
+                    }
+                    sp.closeEntry();
+                }
 
                 // online downloads will not have a file location or request params set
                 // in dd.
@@ -707,7 +757,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                 sp.closeEntry();
 
                 // Add headings file, listing information about the headings
-                if (headingsEnabled) {
+                if (headingsEnabled && !requestParams.getFileType().equals("map")) {
                     // add the citations for the supplied uids
                     sp.putNextEntry("headings.csv");
                     try {
@@ -718,7 +768,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                     sp.closeEntry();
                 } else {
                     if (logger.isDebugEnabled()) {
-                        logger.debug("Not adding header. Enabled: " + headingsEnabled + " uids: " + uidStats);
+                        logger.debug("Not adding header. Enabled: " + headingsEnabled + " type: " + requestParams.getFileType() + " uids: " + uidStats);
                     }
                 }
 
@@ -740,6 +790,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                 }
 
                 // log the stats to ala logger
+                //TODO: should map downloads be logged differently?
                 LogEventVO vo = new LogEventVO(1002, requestParams.getReasonTypeId(), requestParams.getSourceTypeId(),
                         requestParams.getEmail(), requestParams.getReason(), ip, null, uidStats, sourceUrl);
                 logger.log(RestLevel.REMOTE, vo);
@@ -1136,6 +1187,77 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                 logger.error("failed to append misc header", e);
             }
         }
+    }
+
+    public boolean createMapImage(DownloadRequestParams requestParams,
+                                  HttpServletRequest request, DownloadDetailsDTO dd) {
+
+        String mapParams = requestParams.getMapLayoutParams();
+
+
+        List<NameValuePair> listParams = null;
+        try {
+            listParams = URLEncodedUtils.parse(new URI("http://ignore.com?" + mapParams), "UTF-8");
+        } catch (URISyntaxException e) {
+            logger.error(e.getMessage(), e);
+            return false;
+        }
+        Map<String, String> mappedParams = listParams.stream().collect(
+                Collectors.toMap(NameValuePair::getName, NameValuePair::getValue));
+
+        WMSController wmsController = new WMSController();
+        SpatialSearchRequestParams spatialParams = new SpatialSearchRequestParams();
+        if (mappedParams.containsKey("wkt")) spatialParams.setWkt(mappedParams.get("wkt"));
+        if (mappedParams.containsKey("lat")) spatialParams.setLat(Float.parseFloat(mappedParams.get("lat")));
+        if (mappedParams.containsKey("lon")) spatialParams.setLon(Float.parseFloat(mappedParams.get("lon")));
+        if (mappedParams.containsKey("radius")) spatialParams.setRadius(Float.parseFloat(mappedParams.get("radius")));
+
+        String extents = mappedParams.get("extents");
+        String format = mappedParams.get("format");
+        Double widthmm = (mappedParams.get("widthmm") == null? 60.0 : Double.parseDouble(mappedParams.get("widthmm")));
+        Double pradiusmm = (mappedParams.get("pradiusmm") == null? 2.0 : Double.parseDouble(mappedParams.get("pradiusmm")));
+        Integer pradiuspx = (mappedParams.get("pradiuspx") == null? null : Integer.parseInt(mappedParams.get("pradiuspx")));
+        String pcolour = (mappedParams.get("pcolour") == null? "FF0000" : mappedParams.get("pcolour"));
+        String env = (mappedParams.get("env") == null? "" : mappedParams.get("env"));
+        String srs = (mappedParams.get("srs") == null? "EPSG:900913" : mappedParams.get("srs"));
+        Double popacity = (mappedParams.get("popacity") == null? 0.8 : Double.parseDouble(mappedParams.get("popacity")));
+        String baselayer = (mappedParams.get("baselayer") == null? "world" : mappedParams.get("baselayer"));
+        String scale = (mappedParams.get("scale") == null? " off" : mappedParams.get("scale"));
+        Integer dpi = (mappedParams.get("dpi") == null? 300 : Integer.parseInt(mappedParams.get("dpi")));
+        String baselayerStyle = (mappedParams.get("baselayerStyle") == null? "" : mappedParams.get("baselayerStyle"));
+        String outline = (mappedParams.get("outline") == null? "false" : mappedParams.get("outline"));
+        String outlineColour = (mappedParams.get("outlineColour") == null? "#000000" : mappedParams.get("outlineColour"));
+        String fileName = requestParams.getFile() + '.' + mappedParams.get("format");
+        String baseMap = (mappedParams.get("baseMap") == null? "ALA" : mappedParams.get("baseMap"));
+        String q = request.getParameter("q");
+        String[] fqs = request.getParameterValues("fq");
+
+        BufferedImage img = null;
+        try {
+            img = wmsController.generatePublicationMapImage(spatialParams, extents, widthmm,pradiusmm,pradiuspx,pcolour,env,srs,popacity,baselayer,scale,dpi,baselayerStyle,Boolean.parseBoolean(outline),outlineColour,baseMap,q,fqs,MAX_IMAGE_PIXEL_COUNT,webservicesRoot,geoserverUrl);
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            return false;
+        }
+        //save img to file
+        int[] heightWidth = wmsController.getExtentsWidthHeight(extents, widthmm, dpi);
+        File fileMap = new File(biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + fileName);
+        try {
+            if (format.equalsIgnoreCase("png")) {
+                ImageIO.write(img, format, fileMap);
+            } else {
+                //handle jpeg + BufferedImage.TYPE_INT_ARGB
+                BufferedImage img2;
+                Graphics2D c2;
+                (c2 = (Graphics2D) (img2 = new BufferedImage(heightWidth[1], heightWidth[0], BufferedImage.TYPE_INT_RGB)).getGraphics()).drawImage(img, 0, 0, Color.WHITE, null);
+                c2.dispose();
+                ImageIO.write(img2, format, fileMap);
+            }
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            return false;
+        }
+        return true;
     }
 
     /**
