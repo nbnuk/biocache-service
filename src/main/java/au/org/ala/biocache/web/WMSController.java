@@ -31,6 +31,7 @@ import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.response.FacetField;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.ehcache.EhCacheManagerFactoryBean;
 import org.springframework.stereotype.Controller;
@@ -1701,7 +1702,7 @@ public class WMSController extends AbstractSecureController{
 
         //get from cache, or make it
         boolean canCache = wmsCache.isEnabled() && cache.equalsIgnoreCase("on");
-        canCache = false; //for testing
+        //canCache = false; //for testing
         WMSTile wco = getWMSCacheObject(requestParams, vars, pointType, bbox, originalFqs, boundingBoxFqs, canCache, true);
 
         //correction for gridDivisionCount
@@ -1731,6 +1732,140 @@ public class WMSController extends AbstractSecureController{
         } else {
             displayBlankImage(response);
         }
+    }
+
+    /**
+     * Method that produces the map image integrated in AVH/OZCAM/Biocache. Note that this is ok even if class not instantiated via spring
+     *
+     * @param requestParams
+     * @param format
+     * @param extents
+     * @param widthMm
+     * @param pointRadiusMm
+     * @param pradiusPx
+     * @param pointColour
+     * @param pointOpacity
+     * @param baselayer
+     * @param scale
+     * @param dpi
+     * @param outlinePoints
+     * @param outlineColour
+     * @param fileName
+     * @param q
+     * @param fqs
+     * @param config_MAX_IMAGE_PIXEL_COUNT
+     * @param config_baseWsUrl
+     * @param config_geoserverUrl
+     * @throws Exception
+     */
+
+    public BufferedImage generatePublicationMapImage(
+            SpatialSearchRequestParams requestParams,
+            String extents,
+            Double widthMm,
+            Double pointRadiusMm,
+            Integer pradiusPx,
+            String pointColour,
+            String env,
+            String srs,
+            Double pointOpacity,
+            String baselayer,
+            String scale,
+            Integer dpi,
+            String baselayerStyle,
+            boolean outlinePoints,
+            String outlineColour,
+            String baseMap,
+            String q,
+            String[] fqs,
+            int config_MAX_IMAGE_PIXEL_COUNT,
+            String config_baseWsUrl,
+            String config_geoserverUrl) throws Exception {
+
+
+        String[] bb = extents.split(",");
+        int[] heightWidth = getExtentsWidthHeight(extents, widthMm, dpi);
+
+        if (heightWidth[1] * heightWidth[0] > config_MAX_IMAGE_PIXEL_COUNT) {
+            String errorMessage = "Image size in pixels " + heightWidth[1] + "x" + heightWidth[0] + " exceeds " + config_MAX_IMAGE_PIXEL_COUNT + " pixels.  Make the image smaller";
+            throw new Exception(errorMessage);
+        }
+
+        int pointSize = -1;
+        if (pradiusPx != null) {
+            pointSize = (int) pradiusPx;
+        } else {
+            pointSize = (int) ((dpi / 25.4) * pointRadiusMm);
+        }
+
+        double[] boundingBox = transformBbox4326To900913(Double.parseDouble(bb[0]), Double.parseDouble(bb[1]), Double.parseDouble(bb[2]), Double.parseDouble(bb[3]));
+
+
+        String rendering = "ENV=color%3A" + pointColour + "%3Bname%3Acircle%3Bsize%3A" + pointSize
+                + "%3Bopacity%3A" + pointOpacity;
+        if (StringUtils.isNotEmpty(env)) {
+            rendering = "ENV=" + env;
+        }
+
+        //"http://biocache.ala.org.au/ws/webportal/wms/reflect?
+        //q=macropus&ENV=color%3Aff0000%3Bname%3Acircle%3Bsize%3A3%3Bopacity%3A1
+        //&BBOX=12523443.0512,-2504688.2032,15028131.5936,0.33920000120997&WIDTH=256&HEIGHT=256");
+        String speciesAddress = config_baseWsUrl
+                + "/ogc/wms/reflect?"
+                + rendering
+                + "&SRS=" + srs
+                + "&BBOX=" + boundingBox[0] + "," + boundingBox[1] + "," + boundingBox[2] + "," + boundingBox[3]
+                + "&WIDTH=" + heightWidth[1] + "&HEIGHT=" + heightWidth[0]
+                + "&OUTLINE=" + outlinePoints + "&OUTLINECOLOUR=" + outlineColour;
+
+        //get query parameters
+        if (!StringUtils.isEmpty(q)) {
+            speciesAddress = speciesAddress + "&q=" + URLEncoder.encode(q, "UTF-8");
+        }
+        if (fqs != null && fqs.length != 0) {
+            for (String fq : fqs) {
+                speciesAddress = speciesAddress + "&fq=" + URLEncoder.encode(fq, "UTF-8");
+            }
+        }
+
+        URL speciesURL = new URL(speciesAddress);
+        logger.info("speciesURL = " + speciesURL);
+        BufferedImage speciesImage = ImageIO.read(speciesURL);
+
+        //"http://spatial.ala.org.au/geoserver/wms/reflect?
+        //LAYERS=ALA%3Aworld&SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&STYLES=
+        //&FORMAT=image%2Fjpeg&SRS=EPSG%3A900913&BBOX=12523443.0512,-1252343.932,13775787.3224,0.33920000004582&WIDTH=256&HEIGHT=256"
+        String layout = "";
+        if (!scale.equals("off")) {
+            layout += "layout:scale";
+        }
+        String basemapAddress = config_geoserverUrl + "/wms/reflect?"
+                + "LAYERS=ALA%3A" + baselayer
+                + "&SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&STYLES=" + baselayerStyle
+                + "&FORMAT=image%2Fpng&SRS=" + srs     //specify the mercator projection
+                + "&BBOX=" + boundingBox[0] + "," + boundingBox[1] + "," + boundingBox[2] + "," + boundingBox[3]
+                + "&WIDTH=" + heightWidth[1] + "&HEIGHT=" + heightWidth[0] + "&OUTLINE=" + outlinePoints
+                + "&format_options=dpi:" + dpi + ";" + layout;
+
+        logger.info("basemapAddress = " + basemapAddress);
+        BufferedImage basemapImage;
+
+        if ("roadmap".equalsIgnoreCase(baseMap) || "satellite".equalsIgnoreCase(baseMap) ||
+                "hybrid".equalsIgnoreCase(baseMap) || "terrain".equalsIgnoreCase(baseMap)) {
+            basemapImage = basemapGoogle(heightWidth[1], heightWidth[0], boundingBox, baseMap);
+        } else {
+            basemapImage = ImageIO.read(new URL(basemapAddress));
+        }
+
+        BufferedImage img = new BufferedImage(heightWidth[1], heightWidth[0], BufferedImage.TYPE_INT_ARGB);
+        Graphics2D combined = (Graphics2D) img.getGraphics();
+        combined.drawImage(basemapImage, 0, 0, Color.WHITE, null);
+        //combined.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, pointOpacity.floatValue()));
+        combined.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+        combined.drawImage(speciesImage, null, 0, 0);
+        combined.dispose();
+
+        return img;
     }
 
     /**
@@ -1776,110 +1911,40 @@ public class WMSController extends AbstractSecureController{
             @RequestParam(value = "baseMap", required = false, defaultValue = "ALA") String baseMap,
             HttpServletRequest request, HttpServletResponse response) throws Exception {
 
-        String[] bb = extents.split(",");
 
-        double long1 = Double.parseDouble(bb[0]);
-        double lat1 = Double.parseDouble(bb[1]);
-        double long2 = Double.parseDouble(bb[2]);
-        double lat2 = Double.parseDouble(bb[3]);
+        int[] heightWidth = getExtentsWidthHeight(extents, widthMm, dpi);
 
-        if (lat1 <= -90) {
-            lat1 = -89.999;
-        }
-        if (lat2 >= 90) {
-            lat2 = 89.999;
-        }
-
-        int pminx = convertLngToPixel(long1);
-        int pminy = convertLatToPixel(lat1);
-        int pmaxx = convertLngToPixel(long2);
-        int pmaxy = convertLatToPixel(lat2);
-
-        int width = (int) ((dpi / 25.4) * widthMm);
-        int height = (int) Math.round(width * ((pminy - pmaxy) / (double) (pmaxx - pminx)));
-
-        if (height * width > MAX_IMAGE_PIXEL_COUNT) {
-            String errorMessage = "Image size in pixels " + width + "x" + height + " exceeds " + MAX_IMAGE_PIXEL_COUNT + " pixels.  Make the image smaller";
+        if (heightWidth[0] * heightWidth[1] > MAX_IMAGE_PIXEL_COUNT) {
+            String errorMessage = "Image size in pixels " + heightWidth[1] + "x" + heightWidth[0] + " exceeds " + MAX_IMAGE_PIXEL_COUNT + " pixels.  Make the image smaller";
             response.sendError(response.SC_NOT_ACCEPTABLE, errorMessage);
             throw new Exception(errorMessage);
         }
 
-        int pointSize = -1;
-        if (pradiusPx != null) {
-            pointSize = (int) pradiusPx;
-        } else {
-            pointSize = (int) ((dpi / 25.4) * pointRadiusMm);
-        }
-
-        double[] boundingBox = transformBbox4326To900913(Double.parseDouble(bb[0]), Double.parseDouble(bb[1]), Double.parseDouble(bb[2]), Double.parseDouble(bb[3]));
-
-
-        String rendering = "ENV=color%3A" + pointColour + "%3Bname%3Acircle%3Bsize%3A" + pointSize
-                + "%3Bopacity%3A" + pointOpacity;
-        if(StringUtils.isNotEmpty(env)){
-            rendering = "ENV=" + env;
-        }
-
-        //"http://biocache.ala.org.au/ws/webportal/wms/reflect?
-        //q=macropus&ENV=color%3Aff0000%3Bname%3Acircle%3Bsize%3A3%3Bopacity%3A1
-        //&BBOX=12523443.0512,-2504688.2032,15028131.5936,0.33920000120997&WIDTH=256&HEIGHT=256");
-        String speciesAddress = baseWsUrl
-                + "/ogc/wms/reflect?"
-                + rendering
-                + "&SRS=" + srs
-                + "&BBOX=" + boundingBox[0] + "," + boundingBox[1] + "," + boundingBox[2] + "," + boundingBox[3]
-                + "&WIDTH=" + width + "&HEIGHT=" + height
-                + "&OUTLINE=" + outlinePoints + "&OUTLINECOLOUR=" + outlineColour;
-//                + "&" + request.getQueryString();
-
         //get query parameters
         String q = request.getParameter("q");
         String[] fqs = request.getParameterValues("fq");
-        if(!StringUtils.isEmpty(q)){
-            speciesAddress = speciesAddress + "&q=" + URLEncoder.encode(q, "UTF-8");
-        }
-        if(fqs != null && fqs.length != 0){
-           for(String fq: fqs){
-               speciesAddress = speciesAddress + "&fq=" + URLEncoder.encode(fq, "UTF-8");
-           }
-        }
 
-        URL speciesURL = new URL(speciesAddress);
-        logger.info("speciesURL = " + speciesURL);
-        BufferedImage speciesImage = ImageIO.read(speciesURL);
-
-        //"http://spatial.ala.org.au/geoserver/wms/reflect?
-        //LAYERS=ALA%3Aworld&SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&STYLES=
-        //&FORMAT=image%2Fjpeg&SRS=EPSG%3A900913&BBOX=12523443.0512,-1252343.932,13775787.3224,0.33920000004582&WIDTH=256&HEIGHT=256"
-        String layout = "";
-        if (!scale.equals("off")) {
-            layout += "layout:scale";
-        }
-        String basemapAddress = geoserverUrl + "/wms/reflect?"
-                + "LAYERS=ALA%3A" + baselayer
-                + "&SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&STYLES=" + baselayerStyle
-                + "&FORMAT=image%2Fpng&SRS=" + srs     //specify the mercator projection
-                + "&BBOX=" + boundingBox[0] + "," + boundingBox[1] + "," + boundingBox[2] + "," + boundingBox[3]
-                + "&WIDTH=" + width + "&HEIGHT=" + height + "&OUTLINE=" + outlinePoints
-                + "&format_options=dpi:" + dpi + ";" + layout;
-
-        logger.info("basemapAddress = " + basemapAddress);
-        BufferedImage basemapImage;
-
-        if ("roadmap".equalsIgnoreCase(baseMap) || "satellite".equalsIgnoreCase(baseMap) ||
-                "hybrid".equalsIgnoreCase(baseMap) || "terrain".equalsIgnoreCase(baseMap)){
-            basemapImage = basemapGoogle(width, height, boundingBox, baseMap);
-        } else {
-            basemapImage = ImageIO.read(new URL(basemapAddress));
-        }
-
-        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D combined = (Graphics2D) img.getGraphics();
-        combined.drawImage(basemapImage, 0, 0, Color.WHITE, null);
-        //combined.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, pointOpacity.floatValue()));
-        combined.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
-        combined.drawImage(speciesImage, null, 0, 0);
-        combined.dispose();
+        BufferedImage img = generatePublicationMapImage(requestParams,
+                extents,
+                widthMm,
+                pointRadiusMm,
+                pradiusPx,
+                pointColour,
+                env,
+                srs,
+                pointOpacity,
+                baselayer,
+                scale,
+                dpi,
+                baselayerStyle,
+                outlinePoints,
+                outlineColour,
+                baseMap,
+                q,
+                fqs,
+                MAX_IMAGE_PIXEL_COUNT,
+                baseWsUrl,
+                geoserverUrl);
 
         //if filename supplied, force a download
         if (fileName != null) {
@@ -1904,7 +1969,7 @@ public class WMSController extends AbstractSecureController{
                 //handle jpeg + BufferedImage.TYPE_INT_ARGB
                 BufferedImage img2;
                 Graphics2D c2;
-                (c2 = (Graphics2D) (img2 = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)).getGraphics()).drawImage(img, 0, 0, Color.WHITE, null);
+                (c2 = (Graphics2D) (img2 = new BufferedImage(heightWidth[1], heightWidth[0], BufferedImage.TYPE_INT_RGB)).getGraphics()).drawImage(img, 0, 0, Color.WHITE, null);
                 c2.dispose();
                 OutputStream os = response.getOutputStream();
                 ImageIO.write(img2, format, os);
@@ -2891,6 +2956,34 @@ public class WMSController extends AbstractSecureController{
 
     public void setOrgEmail(String orgEmail) {
         this.orgEmail = orgEmail;
+    }
+
+    public int[] getExtentsWidthHeight(String extents,
+                                        Double widthMm,
+                                        Integer dpi) {
+        String[] bb = extents.split(",");
+
+        double long1 = Double.parseDouble(bb[0]);
+        double lat1 = Double.parseDouble(bb[1]);
+        double long2 = Double.parseDouble(bb[2]);
+        double lat2 = Double.parseDouble(bb[3]);
+
+        if (lat1 <= -90) {
+            lat1 = -89.999;
+        }
+        if (lat2 >= 90) {
+            lat2 = 89.999;
+        }
+
+        int pminx = convertLngToPixel(long1);
+        int pminy = convertLatToPixel(lat1);
+        int pmaxx = convertLngToPixel(long2);
+        int pmaxy = convertLatToPixel(lat2);
+
+        int[] heightWidth = new int[2];
+        heightWidth[1] = (int) ((dpi / 25.4) * widthMm);
+        heightWidth[0] = (int) Math.round(heightWidth[1] * ((pminy - pmaxy) / (double) (pmaxx - pminx)));
+        return heightWidth;
     }
 }
 

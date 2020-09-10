@@ -21,6 +21,7 @@ import au.org.ala.biocache.dao.SearchDAO;
 import au.org.ala.biocache.dto.DownloadDetailsDTO;
 import au.org.ala.biocache.dto.DownloadRequestParams;
 import au.org.ala.biocache.dto.IndexFieldDTO;
+import au.org.ala.biocache.dto.SpatialSearchRequestParams;
 import au.org.ala.biocache.service.AuthService;
 import au.org.ala.biocache.service.DownloadService;
 import net.sf.json.JSONArray;
@@ -28,23 +29,35 @@ import net.sf.json.JsonConfig;
 import net.sf.json.util.PropertyFilter;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.http.NameValuePair;
 import org.apache.log4j.Logger;
 import org.apache.solr.common.SolrDocumentList;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
+import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.apache.http.client.utils.URLEncodedUtils;
+
 
 /**
  * A Controller for downloading records based on queries.  This controller
@@ -223,6 +236,25 @@ public class DownloadController extends AbstractSecureController {
             status.put("status", "inQueue");
             status.put("queueSize", persistentQueueDAO.getTotalDownloads());
             status.put("statusUrl", downloadService.webservicesRoot + "/occurrences/offline/status/" + dd.getUniqueId());
+        } else if (requestParams.getFileType().equalsIgnoreCase("map")) {
+            File file = new File(downloadService.biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + "map");
+            FileUtils.forceMkdir(file.getParentFile());
+            status.put("downloadUrl", downloadService.biocacheDownloadUrl);
+            status.put("status", "running");
+            status.put("message", "Map");
+            boolean imgOk = downloadService.createMapImage(requestParams, request, dd);
+            if (!imgOk) {
+                status.put("status", "failed");
+                status.put("message", "Failed to create map image.");
+                status.put("error", "Failed to create map image.");
+            } else {
+
+                //hook into normal download process to generate citations.csv and readme.html files and zip everything.
+                persistentQueueDAO.addDownloadToQueue(dd);
+                status.put("status", "finished");
+                status.put("queueSize", persistentQueueDAO.getTotalDownloads());
+                status.put("statusUrl", downloadService.webservicesRoot + "/occurrences/offline/status/" + dd.getUniqueId());
+            }
         } else if (dd.getTotalRecords() > downloadService.dowloadOfflineMaxSize) {
             //identify this download as too large
             File file = new File(downloadService.biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + "tooLarge");
