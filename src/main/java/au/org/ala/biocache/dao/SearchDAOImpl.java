@@ -108,16 +108,16 @@ public class SearchDAOImpl implements SearchDAO {
     public static final String OCCURRENCE_YEAR_INDEX_FIELD = "occurrence_year";
 
     //sensitive fields and their non-sensitive replacements
-    private static final String[] sensitiveCassandraHdr = {"decimalLongitude", "decimalLatitude", "locality", "eventDate", "eventDateEnd", "gridReference", "coordinateUncertaintyInMeters"};
-    private static final String[] sensitiveSOLRHdr = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"}; // *** RR sensitive_coordinate_uncertainty
+    private static final String[] sensitiveCassandraHdr = {"highresolution_p", "decimalLongitude", "decimalLatitude", "locality", "eventDate", "eventDateEnd", "gridReference", "coordinateUncertaintyInMeters", "gridSizeInMeters"};
+    private static final String[] sensitiveSOLRHdr = {"sensitive", "highresolution", "sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference", "sensitive_coordinate_uncertainty", "sensitive_grid_size"};
 
-    private static final String[] sensitiveCassandraHdr_NoDay = {"decimalLongitude", "decimalLatitude", "locality", "gridReference", "coordinateUncertaintyInMeters"};
-    private static final String[] sensitiveSOLRHdr_NoDay = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"}; // *** RR sensitive_coordinate_uncertainty
+    private static final String[] sensitiveCassandraHdr_NoDay = {"highresolution_p", "decimalLongitude", "decimalLatitude", "locality", "gridReference", "coordinateUncertaintyInMeters", "gridSizeInMeters"};
+    private static final String[] sensitiveSOLRHdr_NoDay = {"sensitive", "highresolution", "sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_grid_reference", "sensitive_coordinate_uncertainty", "sensitive_grid_size"};
 
-    private static final String[] notSensitiveCassandraHdr = {"decimalLongitude_p", "decimalLatitude_p", "locality", "eventDate_p", "eventDateEnd_p", "gridReference", "coordinateUncertaintyInMeters_p"};
-    private static final String[] notSensitiveCassandraHdr_NoDay = {"decimalLongitude_p", "decimalLatitude_p", "locality", "gridReference", "coordinateUncertaintyInMeters_p"};
+    private static final String[] notSensitiveCassandraHdr = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"};
+    private static final String[] notSensitiveCassandraHdr_NoDay = {"placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield", "placeholderfield"};
 
-    private static final String[] notSensitiveSOLRHdr = {"longitude", "latitude", "locality", "grid_reference", "coordinate_uncertainty"};
+    private static final String[] notSensitiveSOLRHdr = {"longitude", "latitude", "locality", "grid_reference", "coordinate_uncertainty", "grid_size"};
 
     /**
      * SOLR client instance
@@ -172,10 +172,10 @@ public class SearchDAOImpl implements SearchDAO {
     @Value("${download.whitelisted.licenseAnnotation:}")
     protected String whitelistedLicenseAnnotation;
 
-    /* does this user have access to sensitive records within this download? */
+    /* does this user have access to sensitive (or high-res) records within this download? */
     protected Boolean hasWhitelistedSensitiveRecords;
     /* the user's whitelist */
-    Map<String,ArrayList> whitelistDataResTaxa;
+    Map<String,ArrayList> whitelistDataResTaxa; //TODO high-res: hmm - this will change now
     /* whitelist SOLR fq */
     String whitelistFq;
 
@@ -480,6 +480,8 @@ public class SearchDAOImpl implements SearchDAO {
 
         final String jsonUri = registryUrl + "/sensitiveAccess/" + (user == null? "-1" : user.get("userId")); //user is null if spatial(?) download. request doesn't include email, downloaded directly.
         logger.info("Requesting whitelisting for user: " + jsonUri);
+
+        //TODO two-tier: rework once new whitelisting criteria defined
         Map<String,Map> dataResourceTaxaWhitelist = new HashMap<>();
         try {
             dataResourceTaxaWhitelist = restTemplate.getForObject(jsonUri, Map.class);
@@ -493,44 +495,46 @@ public class SearchDAOImpl implements SearchDAO {
         //combine with existing query and see if no. of records returned > 0
         //if so, then need to include sensitive fields in download, since some records will have these
         hasWhitelistedSensitiveRecords = false;
+        whitelistFq = "data_resource_uid:dr9999"; //placeholder TODO set from web service call
 
-        if (dataResourceTaxaWhitelist.containsKey("dataResourceTaxa")) {
-            whitelistDataResTaxa = dataResourceTaxaWhitelist.get("dataResourceTaxa");
-            if (whitelistDataResTaxa.size() > 0) {
-                whitelistFq = "";
-                for (Map.Entry<String, ArrayList> entry : whitelistDataResTaxa.entrySet()) {
-                    if (whitelistFq.length() > 0) whitelistFq += " OR ";
-                    whitelistFq += "(lsid:" + entry.getKey() + " AND (";
-                    ArrayList<String> listDs = entry.getValue();
-                    for (Integer i = 0; i < listDs.size(); i++) {
-                        if (i > 0) whitelistFq += " OR ";
-                        whitelistFq += "data_resource_uid:" + listDs.get(i);
-                    }
-                    whitelistFq += "))";
-                }
-                logger.info("whitelistFq = " + whitelistFq);
-
-                SolrQuery solrQueryHasSensitive = new SolrQuery();
-                solrQueryHasSensitive.setQuery(downloadParams.getFormattedQuery());
-
-                String[] fq = downloadParams.getFormattedFq();
-                if (fq == null) fq = new String[0];
-                fq = org.apache.commons.lang3.ArrayUtils.addAll(fq, whitelistFq);
-
-                solrQueryHasSensitive.setFilterQueries(fq);
-
-                QueryResponse queryResponse = null;
-
-                try {
-                    queryResponse = runSolrQuery(solrQueryHasSensitive, null, 0, 0, "", "");
-                } catch (Exception ex) {
-                    logger.error("Error executing query with requestParams: " + solrQueryHasSensitive.toString(), ex);
-                }
-                logger.info("Whitelisted records = " + queryResponse.getResults().getNumFound());
-
-                if (queryResponse.getResults().getNumFound() > 0) hasWhitelistedSensitiveRecords = true;
+        Boolean isAdmin = false;
+        List<String> user_roles = (List<String>) user.get("roles");
+        if (user_roles != null) {
+            if (user_roles.contains("ROLE_ADMIN")) isAdmin = true;
+        }
+        if (isAdmin) {
+            if (dd.getIncludeSensitive_admin_override_all()) {
+                //note: sensitive:alreadyGeneralised may have high resolution sensitive_* values
+                whitelistFq = "(sensitive:generalised OR highresolution:true)";
+            } else {
+                whitelistFq = "-(sensitive:generalised OR highresolution:true)";
             }
         }
+        String actualHighResOrSensitiveFq = "(sensitive:generalised OR highresolution:true)";
+
+        logger.info("whitelistFq = " + whitelistFq);
+
+        SolrQuery solrQueryHasRelevantRecs = new SolrQuery();
+        solrQueryHasRelevantRecs.setQuery(downloadParams.getFormattedQuery());
+
+        String[] fq = downloadParams.getFormattedFq();
+        if (fq == null) fq = new String[0];
+        fq = org.apache.commons.lang3.ArrayUtils.addAll(fq, whitelistFq);
+        fq = org.apache.commons.lang3.ArrayUtils.addAll(fq, actualHighResOrSensitiveFq);
+
+        solrQueryHasRelevantRecs.setFilterQueries(fq);
+
+        QueryResponse queryResponse = null;
+
+        try {
+            queryResponse = runSolrQuery(solrQueryHasRelevantRecs, null, 0, 0, "", "");
+        } catch (Exception ex) {
+            logger.error("Error executing query with requestParams: " + solrQueryHasRelevantRecs.toString(), ex);
+        }
+        logger.info("Whitelisted records = " + queryResponse.getResults().getNumFound());
+
+        if (queryResponse.getResults().getNumFound() > 0) hasWhitelistedSensitiveRecords = true;
+
     }
 
     /**
@@ -1072,11 +1076,11 @@ public class SearchDAOImpl implements SearchDAO {
             if (includeSensitive || hasWhitelistedSensitiveRecords ) {
                 //include raw latitude and longitudes
                 if (requestedFieldsParam.contains("decimalLatitude_p")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude_p", "sensitive_latitude,sensitive_longitude,decimalLatitude_p");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude_p", "sensitive,highresolution,sensitive_latitude,sensitive_longitude,decimalLatitude_p");
                 } else if (requestedFieldsParam.contains("decimalLatitude")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude", "sensitive_latitude,sensitive_longitude,decimalLatitude");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude", "sensitive,highresolution,sensitive_latitude,sensitive_longitude,decimalLatitude");
                 } else if (requestedFieldsParam.contains(",latitude,")) { //SOLR field
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",latitude,", ",sensitive_latitude,sensitive_longitude,latitude,");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",latitude,", ",sensitive,highresolution,sensitive_latitude,sensitive_longitude,latitude,");
                 }
                 if (requestedFieldsParam.contains(",locality,")) {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality,", ",sensitive_locality,locality,");
@@ -1211,6 +1215,9 @@ public class SearchDAOImpl implements SearchDAO {
                 // include record sensitive flag
                 if (!solrQuery.getFields().contains(",sensitive,")) {
                     solrQuery.addField("sensitive");
+                }
+                if (!solrQuery.getFields().contains(",highresolution,")) {
+                    solrQuery.addField("highresolution");
                 }
             }
 
@@ -1701,10 +1708,12 @@ public class SearchDAOImpl implements SearchDAO {
         int count = 0;
         int record = 0;
 
-        Integer drUid_index = 0, lsid_index = 0;
+        Integer drUid_index = 0, lsid_index = 0, sensitive_index = 0, highresolution_index = 0;
         for (int i = 0; i < fields.length; i++) {
             if (fields[i].equalsIgnoreCase("data_resource_uid")) drUid_index = i;
             if (fields[i].equalsIgnoreCase("taxon_concept_lsid"))lsid_index = i;
+            if (fields[i].equalsIgnoreCase("sensitive")) sensitive_index = i;
+            if (fields[i].equalsIgnoreCase("highresolution")) highresolution_index = i;
         }
 
         for (SolrDocument sd : qr.getResults()) {
@@ -1835,16 +1844,23 @@ public class SearchDAOImpl implements SearchDAO {
                     String lsid = values[lsid_index];
                     //logger.info("Checking record with lsid=" + lsid + " and dr = " + drUid);
                     Boolean isWhitelistedRec = false;
-                    if (whitelistDataResTaxa.containsKey(lsid)) {
-                        //logger.info("lsid is in whitelist");
-                        ArrayList<String> listDs = whitelistDataResTaxa.get(lsid);
-                        if (listDs.contains(drUid)) {
+                    if (dd.getIncludeSensitive_admin_override_all()) {
+                        if (values[sensitive_index].equalsIgnoreCase("generalised") || //exclude alreadyGeneralised
+                                values[highresolution_index].equalsIgnoreCase("true")) {
                             isWhitelistedRec = true;
                         }
+                    } else {
+                        //if (whitelistDataResTaxa.containsKey(lsid)) { //TODO high-res: FIXME
+                            //logger.info("lsid is in whitelist");
+                         //   ArrayList<String> listDs = whitelistDataResTaxa.get(lsid);
+                         //   if (listDs.contains(drUid)) {
+                                isWhitelistedRec = true;
+                         //   }
+                        //}
                     }
                     if (!isWhitelistedRec) {
                         for (int i = 0; i < fields.length; i++) {
-                            if (fields[i].startsWith("sensitive_")) {
+                            if (fields[i].startsWith("sensitive_")) { //note, removes highresolution content as well, since stored in same fields
                                 if (values[i] != null && !values[i].isEmpty()) {
                                     values[i] = "";
                                 }
@@ -1922,6 +1938,7 @@ public class SearchDAOImpl implements SearchDAO {
 
             if (includeSensitive) {
                 //include raw latitude and longitudes
+                //TODO high-res: include gridReference, gridSizeInMeters ?
                 dFields = dFields.replaceFirst("decimalLatitude_p", "decimalLatitude,decimalLongitude,decimalLatitude_p").replaceFirst(",locality,", ",locality,sensitive_locality,");
 
             }
@@ -2379,6 +2396,8 @@ public class SearchDAOImpl implements SearchDAO {
                 }
 
                 String[] newMiscFields;
+                //TODO high-res: there is some work from phase 1 that might be useful here,
+                //https://github.com/nbnuk/biocache-service/compare/master...nbnuk:twotier#diff-7e0db2a32f20a797dd3f589c9047852164a829198bb4e1274a25f37f1859bfcaR2548 line 2548 onwards
                 if (sensitiveQ.contains(q)) {
                     newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), sensitiveFields, qaFields, true, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert, whitelistedLicenseAnnotation);
                 } else {
@@ -2907,6 +2926,7 @@ public class SearchDAOImpl implements SearchDAO {
         if (requestParams.getFormattedFq() != null) {
             for (String fq : requestParams.getFormattedFq()) {
                 if (StringUtils.isNotEmpty(fq)) {
+                    solrQuery.removeFilterQuery(fq); //to avoid having it twice
                     solrQuery.addFilterQuery(fq);
                 }
             }
@@ -3524,7 +3544,7 @@ public class SearchDAOImpl implements SearchDAO {
         searchParams.setPageSize(0);
         SolrQuery facetQuery = initSolrQuery(searchParams, false, null);
         facetQuery.setQuery(queryString);
-        facetQuery.setFields(null);
+        facetQuery.setFields((java.lang.String[]) null);
         facetQuery.setRows(0);
         facetQuery.setFacetLimit(-1);
 
@@ -3573,7 +3593,7 @@ public class SearchDAOImpl implements SearchDAO {
             synchronized (solrIndexVersionLock) {
                 result = indexFields;
                 if (result.size() == 0 || update) {
-                    result = getIndexFieldDetails(null);
+                    result = getIndexFieldDetails((java.lang.String[])null);
                     if (result != null && result.size() > 0) {
                         Map<String, IndexFieldDTO> resultMap = new HashMap<String, IndexFieldDTO>();
                         for (IndexFieldDTO field : result) {
@@ -4298,7 +4318,7 @@ public class SearchDAOImpl implements SearchDAO {
                     @Override
                     public void run() {
                         try {
-                            getIndexFieldDetails(null);
+                            getIndexFieldDetails((java.lang.String[]) null);
                         } catch (Exception e) {
                             logger.error("Failed to update solrIndexVersion", e);
                         }
@@ -4351,7 +4371,7 @@ public class SearchDAOImpl implements SearchDAO {
         //get facet group counts
         SolrQuery query = initSolrQuery(searchParams, false, null);
         query.setQuery(queryString);
-        query.setFields(null);
+        query.setFields((java.lang.String[]) null);
         //now use the supplied facets to add groups to the query
         query.add("group", "true");
         query.add("group.ngroups", "true");
@@ -4480,7 +4500,7 @@ public class SearchDAOImpl implements SearchDAO {
         //get facet group counts
         SolrQuery query = initSolrQuery(searchParams, false, null);
         query.setQuery(queryString);
-        query.setFields(null);
+        query.setFields((java.lang.String[]) null);
         //now use the supplied facets to add groups to the query
         query.add("facet.pivot", pivot);
         query.add("facet.pivot.mincount", "1");
@@ -4591,7 +4611,7 @@ public class SearchDAOImpl implements SearchDAO {
         //get facet group counts
         SolrQuery query = initSolrQuery(searchParams, false, null);
         query.setQuery(queryString);
-        query.setFields(null);
+        query.setFields((java.lang.String[]) null);
         //query.setFacetLimit(-1);
 
         //stats parameters
@@ -4639,7 +4659,7 @@ public class SearchDAOImpl implements SearchDAO {
         //get facet group counts
         SolrQuery query = initSolrQuery(searchParams, false, null);
         query.setQuery(queryString);
-        query.setFields(null);
+        query.setFields((java.lang.String[]) null);
         //query.setFacetLimit(-1);
 
         query.add("facet.pivot", pivot);

@@ -41,6 +41,7 @@ public class DownloadDetailsDTO {
     private DownloadRequestParams requestParams;
     private String fileLocation;
     private boolean includeSensitive = false;
+    private boolean includeSensitive_admin_override_all = false; //admin role override to include all/none sensitive data fields in download
     private Map<String,String> headerMap = null;
     private String [] miscFields = null;
     /**
@@ -189,6 +190,21 @@ public class DownloadDetailsDTO {
      */
     public void setIncludeSensitive(boolean includeSensitive) {
         this.includeSensitive = includeSensitive;
+    }
+
+
+    /**
+     * @return the includeSensitive_admin_override_all
+     */
+    public boolean getIncludeSensitive_admin_override_all() {
+        return includeSensitive_admin_override_all;
+    }
+
+    /**
+     * @param includeSensitive_admin_override_all the includeSensitive_admin_override_all to set
+     */
+    public void setIncludeSensitive_admin_override_all(boolean includeSensitive_admin_override_all) {
+        this.includeSensitive_admin_override_all = includeSensitive_admin_override_all;
     }
 
     /**

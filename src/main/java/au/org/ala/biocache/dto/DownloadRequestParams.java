@@ -83,6 +83,8 @@ public class DownloadRequestParams extends SpatialSearchRequestParams {
      */
     protected String hubName;
 
+    protected Boolean includeSensitiveData = false; //admin role override on whether to include sensitive/highres data or not
+
     /**
      * Custom toString method to produce a String to be used as the request parameters
      * for the Biocache Service webservices
@@ -318,6 +320,14 @@ public class DownloadRequestParams extends SpatialSearchRequestParams {
 
     public void setHubName(String hubName) {
         this.hubName = hubName;
+    }
+
+    public Boolean getIncludeSensitiveData() {
+        return includeSensitiveData;
+    }
+
+    public void setIncludeSensitiveData(Boolean includeSensitiveData) {
+        this.includeSensitiveData = includeSensitiveData;
     }
 
     public String getMapLayoutParams() {
