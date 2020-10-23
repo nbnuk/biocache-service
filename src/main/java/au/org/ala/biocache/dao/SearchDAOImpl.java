@@ -480,15 +480,15 @@ public class SearchDAOImpl implements SearchDAO {
             user = authService.getUserDetails(dd.getEmail());
         }
 
-        final String jsonUri = registryUrl + "/sensitiveAccess/" + (user == null? "-1" : user.get("userId")); //user is null if spatial(?) download. request doesn't include email, downloaded directly.
+        final String jsonUri = registryUrl + "/sensitiveAccessNew/" + (user == null? "-1" : user.get("userId")); //user is null if spatial(?) download. request doesn't include email, downloaded directly.
         logger.info("Requesting whitelisting for user: " + jsonUri);
 
         //TODO two-tier: rework once new whitelisting criteria defined
-        Map<String,Map> dataResourceTaxaWhitelist = new HashMap<>();
+        Map<String,Map> dataProviderWhitelist = new HashMap<>();
         try {
-            dataResourceTaxaWhitelist = restTemplate.getForObject(jsonUri, Map.class);
-            logger.info(dataResourceTaxaWhitelist.toString());
-            logger.info("number of entities = " + dataResourceTaxaWhitelist.size());
+            dataProviderWhitelist = restTemplate.getForObject(jsonUri, Map.class);
+            logger.info(dataProviderWhitelist.toString());
+            logger.info("number of entities = " + dataProviderWhitelist.size());
         } catch (Exception ex) {
             logger.error("RestTemplate error: " + ex.getMessage(), ex);
         }
@@ -497,7 +497,18 @@ public class SearchDAOImpl implements SearchDAO {
         //combine with existing query and see if no. of records returned > 0
         //if so, then need to include sensitive fields in download, since some records will have these
         hasWhitelistedSensitiveRecords = false;
-        whitelistFq = "taxon_concept_lsid:NHMSYS0000080188"; //placeholder TODO set from web service call
+        whitelistFq = "";
+        if (dataProviderWhitelist.containsKey("dataProviderWhitelist")) {
+            Map<String,String> whitelistFQs = dataProviderWhitelist.get("dataProviderWhitelist");
+            if (whitelistFQs.size() > 0) {
+                for (Map.Entry<String, String> entry : whitelistFQs.entrySet()) {
+                    if (whitelistFq.length() > 0) whitelistFq += " OR ";
+                    whitelistFq += "(data_provider_uid:" + entry.getKey() + " AND (" + entry.getValue() + "))";
+                }
+            }
+        }
+
+        //whitelistFq = "taxon_concept_lsid:NHMSYS0000080188"; //placeholder TODO set from web service call
 
         Boolean isAdmin = false;
         List<String> user_roles = (List<String>) user.get("roles");
