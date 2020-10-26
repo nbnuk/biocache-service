@@ -2425,8 +2425,8 @@ public class SearchDAOImpl implements SearchDAO {
                             for (String additionalSOLRfield : additionalSOLRfieldsToAdd) {
                                 String val = "";
                                 if (sd.containsKey(additionalSOLRfield)) {
-                                    val = String.valueOf(sd.getFieldValue("sensitive"));
-                                }
+                                    val = String.valueOf(sd.getFieldValue(additionalSOLRfield));
+                                } 
                                 int extraOffset = 0;
                                 if (extra == null) {
                                     extra = new String[1];
