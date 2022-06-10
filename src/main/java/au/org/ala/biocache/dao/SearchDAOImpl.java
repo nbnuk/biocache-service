@@ -1029,6 +1029,7 @@ public class SearchDAOImpl implements SearchDAO {
         return writeResultsFromIndexToStream(downloadParams, out, includeSensitive, dd, checkLimit, nextExecutor);
     }
 
+
     /**
      * Writes the index fields to the supplied output stream in CSV format.
      * <p>
@@ -1075,35 +1076,17 @@ public class SearchDAOImpl implements SearchDAO {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude_p", "sensitive_latitude,sensitive_longitude,decimalLatitude_p");
                 } else if (requestedFieldsParam.contains("decimalLatitude")) {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude", "sensitive_latitude,sensitive_longitude,decimalLatitude");
-                } else if (requestedFieldsParam.contains(",latitude,")) { //SOLR field
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",latitude,", ",sensitive_latitude,sensitive_longitude,latitude,");
                 }
                 if (requestedFieldsParam.contains(",locality,")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality,", ",sensitive_locality,locality,");
-                }
-                if (requestedFieldsParam.contains(",raw_locality,")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",raw_locality,", ",sensitive_locality,raw_locality,");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality,", ",locality,sensitive_locality,");
                 }
                 if (requestedFieldsParam.contains(",locality_p,")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality_p,", ",sensitive_locality,locality_p,");
+                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality_p,", ",locality_p,sensitive_locality,");
                 }
-                // NBN RR added below
-                //TODO: consider non-SOLR versions of these fields
-                if (requestedFieldsParam.contains(",grid_ref,")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",grid_ref,", ",sensitive_grid_reference,grid_ref,");
-                }
-                if (requestedFieldsParam.contains(",coordinate_uncertainty,")) {
-                    requestedFieldsParam = requestedFieldsParam.replaceFirst(",coordinate_uncertainty,", ",sensitive_coordinate_uncertainty,coordinate_uncertainty,");
-                }
-                if (Config.sensitiveDateDay()) {
-                    if (requestedFieldsParam.contains(",occurrence_date,")) {
-                        requestedFieldsParam = requestedFieldsParam.replaceFirst(",occurrence_date,", ",sensitive_event_date,occurrence_date,");
-                    }
-                    if (requestedFieldsParam.contains(",occurrence_date_end_dt,")) {
-                        requestedFieldsParam = requestedFieldsParam.replaceFirst(",occurrence_date_end_dt,", ",sensitive_event_date_end,occurrence_date_end_dt,");
-                    }
-                }
+
             }
+
+            requestedFieldsParam = addCustomSensitiveFields(requestedFieldsParam, includeSensitive);
 
             StringBuilder dbFieldsBuilder = new StringBuilder(requestedFieldsParam);
             if (!downloadParams.getExtra().isEmpty()) {
@@ -4823,5 +4806,10 @@ public class SearchDAOImpl implements SearchDAO {
         }
 
         return found;
+    }
+
+    /**Added to make customisatikon possible **/
+    protected String addCustomSensitiveFields(String requestedFieldsParam, boolean includeSensitive) {
+        return requestedFieldsParam;
     }
 }
