@@ -154,9 +154,6 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
     @Value("${download.email.template:}")
     protected String biocacheDownloadEmailTemplate;
 
-    @Value("${download.email.template_txt:}")
-    protected String biocacheDownloadEmailTemplateTxt = "";
-
     @Value("${download.doi.email.template:}")
     protected String biocacheDownloadDoiEmailTemplate;
 
@@ -1372,9 +1369,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
 
                                 String doiStr = "";
                                 String emailBody;
-                                String emailBodyTxt;
                                 String emailTemplate;
-                                String emailTemplateTxt = "";
                                 String downloadFileLocation;
                                 if(mintDoi && doiResponseList != null && !doiResponseList.isEmpty() && doiResponseList.get(0) != null) {
 
@@ -1401,7 +1396,6 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                                     }
                                 } else {
                                     emailTemplate = biocacheDownloadEmailTemplate;
-                                    emailTemplateTxt = biocacheDownloadEmailTemplateTxt;
                                     downloadFileLocation = archiveFileLocation;
                                 }
 
@@ -1417,19 +1411,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                                         new Object[]{archiveFileLocation, searchUrl, currentDownload.getStartDateString()},
                                         emailBodyHtml, null);
 
-                                String bodyTxt = "";
-                                if (!emailTemplateTxt.equals("")) {
-                                    emailBodyTxt = Files.asCharSource(new File(emailTemplateTxt), StandardCharsets.UTF_8).read();
-                                    String emailBodyTxtVer = emailBodyTxt.replace("[url]", downloadFileLocation)
-                                            .replace("[date]", currentDownload.getStartDateString())
-                                            .replace("[searchUrl]", searchUrl)
-                                            .replace("[queryTitle]", currentDownload.getRequestParams().getDisplayString())
-                                            .replace("[doi]", doiStr)
-                                            .replace("[doiFailureMessage]", doiFailureMessage);
-                                    bodyTxt = messageSource.getMessage("offlineEmailBody",
-                                            new Object[]{archiveFileLocation, searchUrl, currentDownload.getStartDateString()},
-                                            emailBodyTxtVer, null);
-                                }
+
                                 // save the statistics to the download directory
                                 try (FileOutputStream statsStream = FileUtils
                                         .openOutputStream(new File(new File(currentDownload.getFileLocation()).getParent()
@@ -1441,11 +1423,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                                     // Delay sending the email to allow the DOI to propagate through to upstream DOI providers
                                     Thread.sleep(doiPropagationDelay);
                                 }
-                                if (bodyTxt.equals("") ) {
-                                    emailService.sendEmail(currentDownload.getEmail(), subject, body);
-                                } else {
-                                    emailService.sendEmail(currentDownload.getEmail(), subject, body, bodyTxt);
-                                }
+                                emailService.sendEmail(currentDownload.getEmail(), subject, body);
                             }
 
                         } catch (InterruptedException e) {
