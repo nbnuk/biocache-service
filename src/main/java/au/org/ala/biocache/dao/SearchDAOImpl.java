@@ -1083,10 +1083,10 @@ public class SearchDAOImpl implements SearchDAO {
                 if (requestedFieldsParam.contains(",locality_p,")) {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst(",locality_p,", ",locality_p,sensitive_locality,");
                 }
-
+                requestedFieldsParam = addCustomSensitiveFields(requestedFieldsParam);
             }
 
-            requestedFieldsParam = addCustomSensitiveFields(requestedFieldsParam, includeSensitive);
+
 
             StringBuilder dbFieldsBuilder = new StringBuilder(requestedFieldsParam);
             if (!downloadParams.getExtra().isEmpty()) {
@@ -2885,7 +2885,7 @@ public class SearchDAOImpl implements SearchDAO {
      * @return
      * @throws SolrServerException
      */
-    private QueryResponse runSolrQuery(SolrQuery solrQuery, SearchRequestParams requestParams) throws SolrServerException {
+    protected QueryResponse runSolrQuery(SolrQuery solrQuery, SearchRequestParams requestParams) throws SolrServerException {
 
         if (requestParams.getFormattedFq() != null) {
             for (String fq : requestParams.getFormattedFq()) {
@@ -4522,7 +4522,7 @@ public class SearchDAOImpl implements SearchDAO {
      * @param pfl
      * @return
      */
-    private List<FacetPivotStatsResultDTO> getFacetPivotStatsResults(List<PivotField> pfl) {
+    protected List<FacetPivotStatsResultDTO> getFacetPivotStatsResults(List<PivotField> pfl) {
         if (pfl == null || pfl.size() == 0) {
             return null;
         }
@@ -4602,61 +4602,6 @@ public class SearchDAOImpl implements SearchDAO {
             if (response.getFieldStatsInfo().size() > 0) {
                 output.add(new FieldStatsItem(response.getFieldStatsInfo().values().iterator().next()));
             }
-        }
-
-        return output;
-    }
-
-    /**
-     * @see au.org.ala.biocache.dao.SearchDAO#searchPivotStats
-     */
-    public List<FacetPivotStatsResultDTO> searchPivotStats(SpatialSearchRequestParams searchParams, String stats) throws Exception {
-        String pivot = StringUtils.join(searchParams.getFacets(), ",");
-        searchParams.setFacets(new String[]{});
-
-        queryFormatUtils.formatSearchQuery(searchParams);
-        String queryString = searchParams.getFormattedQuery();
-
-        searchParams.setFacet(true);
-
-        //get facet group counts
-        SolrQuery query = initSolrQuery(searchParams, false, null);
-        query.setQuery(queryString);
-        query.setFields(null);
-        //query.setFacetLimit(-1);
-
-        query.add("facet.pivot", pivot);
-        query.add("facet.pivot.mincount", "1");
-        query.add("facet.missing", "true");
-
-        //stats parameters
-        query.add("stats", "true");
-        query.add("stats.field", stats);
-
-        query.setRows(0);
-        searchParams.setPageSize(0);
-        logger.info("Solr query searchParams:: " + searchParams.toString());
-        logger.info("Solr query:: " + query.toString());
-        QueryResponse response = runSolrQuery(query, searchParams);
-
-        NamedList<List<PivotField>> result = response.getFacetPivot();
-        logger.info(result.toString());
-
-        List<FacetPivotStatsResultDTO> output = new ArrayList();
-        for (Entry<String, List<PivotField>> pfl : result) {
-            List<PivotField> list = pfl.getValue();
-            if (list != null && list.size() > 0) {
-                output.add(new FacetPivotStatsResultDTO(
-                        list.get(0).getField(),
-                        getFacetPivotStatsResults(list),
-                        null,
-                        (int) response.getResults().getNumFound(),
-                        null)
-                );
-            }
-
-            //should only be one result
-            break;
         }
 
         return output;
@@ -4808,8 +4753,8 @@ public class SearchDAOImpl implements SearchDAO {
         return found;
     }
 
-    /**Added to make customisatikon possible **/
-    protected String addCustomSensitiveFields(String requestedFieldsParam, boolean includeSensitive) {
+    /**Added to make customisation possible **/
+    protected String addCustomSensitiveFields(String requestedFieldsParam) {
         return requestedFieldsParam;
     }
 }
