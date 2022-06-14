@@ -63,8 +63,7 @@ public class QueryFormatUtils {
     protected static final String QUOTE = "\"";
     protected static final char[] CHARS = {' ', ':'};
 
-    @Value("${spatial.field:geohash}")
-    private String spatialField;
+    private String spatialField = "geohash";
 
     //Patterns that are used to prepare a SOLR query for execution
     protected Pattern lsidPattern = Pattern.compile("(^|\\s|\"|\\(|\\[|'|-)lsid:\"?([a-zA-Z0-9/\\.:\\-_]*)\"?");
