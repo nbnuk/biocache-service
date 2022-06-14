@@ -4516,30 +4516,7 @@ public class SearchDAOImpl implements SearchDAO {
         return list;
     }
 
-    /**
-     * Read nested pivot results.
-     *
-     * @param pfl
-     * @return
-     */
-    protected List<FacetPivotStatsResultDTO> getFacetPivotStatsResults(List<PivotField> pfl) {
-        if (pfl == null || pfl.size() == 0) {
-            return null;
-        }
 
-        List<FacetPivotStatsResultDTO> list = new ArrayList<>();
-        for (PivotField pf : pfl) {
-            String value = pf.getValue() != null ? pf.getValue().toString() : null;
-            String stats = pf.getFieldStatsInfo() != null ? pf.getFieldStatsInfo().toString() : null;
-            if (pf.getPivot() == null || pf.getPivot().size() == 0) {
-                list.add(new FacetPivotStatsResultDTO(null, null, value, pf.getCount(), stats));
-            } else {
-                list.add(new FacetPivotStatsResultDTO(pf.getPivot().get(0).getField(), getFacetPivotStatsResults(pf.getPivot()), value, pf.getCount(), stats));
-            }
-        }
-
-        return list;
-    }
 
     public StringBuilder getAllQAFields() {
         //include all assertions
