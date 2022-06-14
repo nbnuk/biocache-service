@@ -33,8 +33,13 @@
     </bean>  
           
     <!--<context:spring-configured/>-->
-    <context:component-scan base-package="au.org.ala.biocache"/>
-    
+    <context:component-scan base-package="au.org.ala.biocache">
+        <context:exclude-filter type="assignable" expression="au.org.ala.biocache.service.EmailService"/>
+        <context:exclude-filter type="assignable" expression="au.org.ala.biocache.dao.SearchDAOImpl"/>
+    </context:component-scan>
+
+<!--    <context:component-scan base-package="au.org.ala.biocache" />-->
+
     <!-- Configures the @Controller programming model -->
     <mvc:annotation-driven />
     <task:annotation-driven />
