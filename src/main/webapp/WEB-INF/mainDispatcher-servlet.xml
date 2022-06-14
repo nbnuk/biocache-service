@@ -34,8 +34,9 @@
           
     <!--<context:spring-configured/>-->
     <context:component-scan base-package="au.org.ala.biocache">
-        <context:exclude-filter type="assignable" expression="au.org.ala.biocache.service.EmailService"/>
         <context:exclude-filter type="assignable" expression="au.org.ala.biocache.dao.SearchDAOImpl"/>
+        <context:exclude-filter type="assignable" expression="au.org.ala.biocache.service.EmailService"/>
+        <context:exclude-filter type="assignable" expression="au.org.ala.biocache.web.OccurrenceController"/>
     </context:component-scan>
 
 <!--    <context:component-scan base-package="au.org.ala.biocache" />-->
