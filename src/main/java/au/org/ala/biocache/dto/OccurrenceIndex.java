@@ -48,7 +48,6 @@ public class OccurrenceIndex {
     @Field("occurrence_date") java.util.Date eventDate;
     @Field("occurrence_date_end_dt") java.util.Date eventDateEnd;
     @Field("occurrence_year") java.util.Date occurrenceYear;
-    @Field("vitality") String vitality;
     @Field("taxon_name") String scientificName;
     @Field("common_name") String vernacularName;
     @Field("rank") String taxonRank;
@@ -66,7 +65,6 @@ public class OccurrenceIndex {
     @Field("species_guid") String speciesGuid;
     @Field("subspecies") String subspecies;
     @Field("subspecies_guid") String subspeciesGuid;
-    @Field("life_stage") String[] lifeStage; // now Oct-19 multivalued
     @Field("state") String stateProvince;
     @Field("latitude") Double decimalLatitude;
     @Field("longitude") Double decimalLongitude;
@@ -122,13 +120,56 @@ public class OccurrenceIndex {
     @Field("rights") String rights; 
     @Field("photographer_s") String photographer;
     @Field("grid_ref") String gridReference;
-    @Field("location_id") String locationId;
-    @Field("raw_taxon_id") String raw_taxonId;
-    @Field("raw_sampling_protocol") String raw_samplingProtocol;
     @Field("*_s") Map<String, Object> miscStringProperties;
     @Field("*_i") Map<String, Object> miscIntProperties;
     @Field("*_d") Map<String, Object> miscDoubleProperties;
     @Field("*_dt") Map<String, Object> miscDateProperties;
+
+    //START - NBN Added
+    @Field("vitality") String vitality;
+    @Field("life_stage") String[] lifeStage; // now Oct-19 multivalued
+    @Field("location_id") String locationId;
+    @Field("raw_taxon_id") String raw_taxonId;
+    @Field("raw_sampling_protocol") String raw_samplingProtocol;
+
+    public String getVitality() {
+        return vitality;
+    }
+
+    public void setVitality(String vitality) {
+        this.vitality = vitality;
+    }
+
+    public String[] getLifeStage() { return lifeStage; } //multivalued
+
+    public void setLifeStage(String[] lifeStage) { this.lifeStage = lifeStage; }
+
+    public String getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(String locationId) {
+        this.locationId = locationId;
+    }
+
+    public String getRaw_taxonId() {
+        return raw_taxonId;
+    }
+
+    public void setRaw_taxonId(String raw_taxonId) {
+        this.raw_taxonId = raw_taxonId;
+    }
+
+    public String getRaw_samplingProtocol() {
+        return raw_samplingProtocol;
+    }
+
+    public void setRaw_samplingProtocol(String raw_samplingProtocol) {
+        this.raw_samplingProtocol = raw_samplingProtocol;
+    }
+    //END - NBN Added
+
+
     List<Map<String, Object>> imageMetadata;
 
     String imageUrl;
@@ -228,12 +269,9 @@ public class OccurrenceIndex {
         addToMapIfNotNull(map, "taxon_concept_lsid",taxonConceptID);
         addToMapIfNotNull(map, "occurrence_date", sdate);
         addToMapIfNotNull(map, "occurrence_date_end_dt", sdateEnd);
-        addToMapIfNotNull(map, "vitality", vitality);
         addToMapIfNotNull(map, "taxon_name",scientificName);
         addToMapIfNotNull(map, "common_name",vernacularName);
         addToMapIfNotNull(map, "rank",taxonRank);
-        addToMapIfNotNull(map, "rank_id",safeIntToString(taxonRankID));
-        addToMapIfNotNull(map, "life_stage", arrToString(lifeStage)); //multivalued
         addToMapIfNotNull(map, "country_code", raw_countryCode);
         addToMapIfNotNull(map, "country", country);
         addToMapIfNotNull(map, "kingdom",kingdom); 
@@ -291,10 +329,16 @@ public class OccurrenceIndex {
         addToMapIfNotNull(map, "photographer_s", photographer);
         addToMapIfNotNull(map, "license", license);
         addToMapIfNotNull(map, "grid_ref", gridReference);
-        addToMapIfNotNull(map, "location_id", locationId);
         addToMapIfNotNull(map, "identification_verification_status", identificationVerificationStatus);
+
+        //START - NBN Added - will not be needed in upgrade as done generically
+        addToMapIfNotNull(map, "vitality", vitality);
+        addToMapIfNotNull(map, "rank_id",safeIntToString(taxonRankID));
+        addToMapIfNotNull(map, "life_stage", arrToString(lifeStage)); //multivalued
+        addToMapIfNotNull(map, "location_id", locationId);
         addToMapIfNotNull(map, "raw_taxon_id", raw_taxonId);
         addToMapIfNotNull(map, "raw_sampling_protocol", raw_samplingProtocol);
+        //END - NBN Added
         return map;
     }
 
@@ -315,12 +359,10 @@ public class OccurrenceIndex {
         map.put("taxon_concept_lsid","taxonConceptID");
         map.put("occurrence_date", "eventDate");
         map.put("occurrence_date_end_dt", "eventDateEnd");
-        map.put("vitality", "vitality");
         map.put("taxon_name","scientificName");
         map.put("common_name","vernacularName");
         map.put("rank","taxonRank");
         map.put("rank_id","taxonRankID");
-        map.put("life_stage", "lifeStage");
         map.put("country_code", "raw_countryCode");
         map.put("country", "country");
         map.put("kingdom","kingdom");
@@ -378,9 +420,14 @@ public class OccurrenceIndex {
         map.put("photographer_s", "photographer");
         map.put("license", "license");
         map.put("grid_ref", "gridReference");
+
+        //START - NBN Added - will not be needed in upgrade as done generically
+        map.put("vitality", "vitality");
+        map.put("life_stage", "lifeStage");
         map.put("location_id", "locationId");
         map.put("raw_taxon_id", "raw_taxonId");
         map.put("raw_sampling_protocol", "raw_samplingProtocol");
+        //END - NBN Added
         return map;
     }
 
@@ -502,14 +549,6 @@ public class OccurrenceIndex {
 
     public void setOccurrenceYear(Date occurrenceYear) {
         this.occurrenceYear = occurrenceYear;
-    }
-
-    public String getVitality() {
-        return vitality;
-    }
-
-    public void setVitality(String vitality) {
-        this.vitality = vitality;
     }
 
     public String getScientificName() {
@@ -648,10 +687,6 @@ public class OccurrenceIndex {
         this.subspeciesGuid = subspeciesGuid;
     }
 
-    public String[] getLifeStage() { return lifeStage; } //multivalued
-
-    public void setLifeStage(String[] lifeStage) { this.lifeStage = lifeStage; }
-    
     public String getStateProvince() {
         return stateProvince;
     }
@@ -1104,14 +1139,6 @@ public class OccurrenceIndex {
         this.gridReference = gridReference;
     }
 
-    public String getLocationId() {
-        return locationId;
-    }
-
-    public void setLocationId(String locationId) {
-        this.locationId = locationId;
-    }
-
     public Map<String, Object> getMiscDateProperties() {
         return miscDateProperties;
     }
@@ -1136,19 +1163,4 @@ public class OccurrenceIndex {
         this.identificationVerificationStatus = identificationVerificationStatus;
     }
 
-    public String getRaw_taxonId() {
-        return raw_taxonId;
-    }
-
-    public void setRaw_taxonId(String raw_taxonId) {
-        this.raw_taxonId = raw_taxonId;
-    }
-
-    public String getRaw_samplingProtocol() {
-        return raw_samplingProtocol;
-    }
-
-    public void setRaw_samplingProtocol(String raw_samplingProtocol) {
-        this.raw_samplingProtocol = raw_samplingProtocol;
-    }
 }
