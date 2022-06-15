@@ -108,16 +108,10 @@ public class SearchDAOImpl implements SearchDAO {
     public static final String OCCURRENCE_YEAR_INDEX_FIELD = "occurrence_year";
 
     //sensitive fields and their non-sensitive replacements
-    private static final String[] sensitiveCassandraHdr = {"decimalLongitude", "decimalLatitude", "locality", "eventDate", "eventDateEnd", "gridReference", "coordinateUncertaintyInMeters"};
-    private static final String[] sensitiveSOLRHdr = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"}; // *** RR sensitive_coordinate_uncertainty
-
-    private static final String[] sensitiveCassandraHdr_NoDay = {"decimalLongitude", "decimalLatitude", "locality", "gridReference", "coordinateUncertaintyInMeters"};
-    private static final String[] sensitiveSOLRHdr_NoDay = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_grid_reference", "sensitive_coordinate_uncertainty"}; // *** RR sensitive_coordinate_uncertainty
-
-    private static final String[] notSensitiveCassandraHdr = {"decimalLongitude_p", "decimalLatitude_p", "locality", "eventDate_p", "eventDateEnd_p", "gridReference", "coordinateUncertaintyInMeters_p"};
-    private static final String[] notSensitiveCassandraHdr_NoDay = {"decimalLongitude_p", "decimalLatitude_p", "locality", "gridReference", "coordinateUncertaintyInMeters_p"};
-
-    private static final String[] notSensitiveSOLRHdr = {"longitude", "latitude", "locality", "grid_reference", "coordinate_uncertainty"};
+    protected static String[] sensitiveCassandraHdr = {"decimalLongitude", "decimalLatitude", "verbatimLocality"};
+    protected static String[] sensitiveSOLRHdr = {"sensitive_longitude", "sensitive_latitude", "sensitive_locality", "sensitive_event_date", "sensitive_event_date_end", "sensitive_grid_reference"}; // *** RR sensitive_coordinate_uncertainty
+    protected static String[] notSensitiveCassandraHdr = {"decimalLongitude_p", "decimalLatitude_p", "locality"};
+    protected static String[] notSensitiveSOLRHdr = {"longitude", "latitude", "locality"};
 
     /**
      * SOLR client instance
@@ -1220,11 +1214,7 @@ public class SearchDAOImpl implements SearchDAO {
             final String[] notSensitiveFields;
             if (dd.getSensitiveFq() != null ) {
                 List<String>[] sensitiveHdr;
-                if (Config.sensitiveDateDay()) {
-                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
-                } else {
-                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr_NoDay, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
-                }
+                sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
 
                 //header for the output file
                 indexedFields[2].addAll(sensitiveHdr[2]);
@@ -1432,11 +1422,7 @@ public class SearchDAOImpl implements SearchDAO {
                 // - there is a sensitive fq
                 final List<SolrQuery> sensitiveQ = new ArrayList<SolrQuery>();
                 if (!includeSensitive && dd.getSensitiveFq() != null) {
-                    if (Config.sensitiveDateDay()) {
                         sensitiveQ.addAll(splitQueries(queries, dd.getSensitiveFq(), sensitiveSOLRHdr, notSensitiveSOLRHdr));
-                    } else {
-                        sensitiveQ.addAll(splitQueries(queries, dd.getSensitiveFq(), sensitiveSOLRHdr_NoDay, notSensitiveSOLRHdr));
-                    }
                 }
 
                 final AtomicInteger resultsCount = new AtomicInteger(0);
@@ -1982,20 +1968,12 @@ public class SearchDAOImpl implements SearchDAO {
             if (!includeSensitive && dd.getSensitiveFq() != null && !hasWhitelistedSensitiveRecords) { //** RR
                 //sensitive headers do not have a DwC name, always set getIndexFields dwcHeader=false
                 List<String>[] sensitiveHdr;
-                if (Config.sensitiveDateDay()) {
-                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
-                } else {
-                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr_NoDay, false, downloadParams.getLayersServiceUrl());
-                }
+                sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
 
                 titles = org.apache.commons.lang3.ArrayUtils.addAll(titles, sensitiveHdr[2].toArray(new String[]{}));
             } else if (hasWhitelistedSensitiveRecords) {
                 List<String>[] sensitiveHdr;
-                if (Config.sensitiveDateDay()) {
-                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
-                } else {
-                    sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr_NoDay, false, downloadParams.getLayersServiceUrl());
-                }
+                sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
 
                 titles = org.apache.commons.lang3.ArrayUtils.addAll(titles, sensitiveHdr[2].toArray(new String[]{}));
             }
@@ -2195,11 +2173,7 @@ public class SearchDAOImpl implements SearchDAO {
         if (analysisLayers.length > 0) {
 
             if (!includeSensitive && dd.getSensitiveFq() != null) {
-                if (Config.sensitiveDateDay()) {
-                    for (String s : sensitiveSOLRHdr) solrQuery.addField(s);
-                } else {
-                    for (String s : sensitiveSOLRHdr_NoDay) solrQuery.addField(s);
-                }
+                for (String s : sensitiveSOLRHdr) solrQuery.addField(s);
             } else {
                 for (String s : notSensitiveSOLRHdr) solrQuery.addField(s);
             }
@@ -2230,15 +2204,9 @@ public class SearchDAOImpl implements SearchDAO {
         if ((!includeSensitive && dd.getSensitiveFq() != null && !hasWhitelistedSensitiveRecords) ||
                 (hasWhitelistedSensitiveRecords))  { //** RR
             //lookup for fields from sensitive queries
-            if (Config.sensitiveDateDay()) {
-                sensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, sensitiveCassandraHdr);
-                //use general fields when sensitive data is not permitted
-                notSensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, notSensitiveCassandraHdr);
-            } else {
-                sensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, sensitiveCassandraHdr_NoDay);
-                notSensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, notSensitiveCassandraHdr_NoDay);
-            }
-
+            sensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, sensitiveCassandraHdr);
+            //use general fields when sensitive data is not permitted
+            notSensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, notSensitiveCassandraHdr);
         } else {
             sensitiveFields = new String[0];
             notSensitiveFields = fields;
@@ -2865,7 +2833,7 @@ public class SearchDAOImpl implements SearchDAO {
      * @return
      * @throws SolrServerException
      */
-    private QueryResponse runSolrQuery(SolrQuery solrQuery, String filterQuery[], Integer pageSize,
+    protected QueryResponse runSolrQuery(SolrQuery solrQuery, String filterQuery[], Integer pageSize,
                                        Integer startIndex, String sortField, String sortDirection) throws SolrServerException {
         SearchRequestParams requestParams = new SearchRequestParams();
         requestParams.setFq(filterQuery);
