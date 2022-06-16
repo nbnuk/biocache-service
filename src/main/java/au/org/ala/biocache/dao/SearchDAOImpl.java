@@ -177,8 +177,7 @@ public class SearchDAOImpl implements SearchDAO {
     protected static final Integer FACET_PAGE_SIZE = 1000;
     protected static final String RANGE_SUFFIX = "_RNG";
 
-    @Value("${spatial.field:geohash}")
-    private String spatialField;
+    private String spatialField = "geohash";
 
     protected Pattern layersPattern = Pattern.compile("(el|cl)[0-9abc]+");
     protected Pattern clpField = Pattern.compile("(,|^)cl.p(,|$)");
@@ -366,7 +365,6 @@ public class SearchDAOImpl implements SearchDAO {
         }
 
         getMaxBooleanClauses();
-
     }
 
     public void refreshCaches() {
@@ -459,7 +457,6 @@ public class SearchDAOImpl implements SearchDAO {
         }
         return list1;
     }
-
 
     /**
      * @return An instance of ExecutorService used to concurrently execute multiple endemic queries.
@@ -957,7 +954,6 @@ public class SearchDAOImpl implements SearchDAO {
         return writeResultsFromIndexToStream(downloadParams, out, includeSensitive, dd, checkLimit, nextExecutor);
     }
 
-
     /**
      * Writes the index fields to the supplied output stream in CSV format.
      * <p>
@@ -1013,8 +1009,6 @@ public class SearchDAOImpl implements SearchDAO {
                 }
                 requestedFieldsParam = addCustomSensitiveFields(requestedFieldsParam);
             }
-
-
 
             StringBuilder dbFieldsBuilder = new StringBuilder(requestedFieldsParam);
             if (!downloadParams.getExtra().isEmpty()) {
@@ -1146,9 +1140,8 @@ public class SearchDAOImpl implements SearchDAO {
             //include sensitive fields in the header when the output will be partially sensitive
             final String[] sensitiveFields;
             final String[] notSensitiveFields;
-            if (dd.getSensitiveFq() != null ) {
-                List<String>[] sensitiveHdr;
-                sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
+            if (dd.getSensitiveFq() != null) {
+                List<String>[] sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, downloadParams.getDwcHeaders(), downloadParams.getLayersServiceUrl());
 
                 //header for the output file
                 indexedFields[2].addAll(sensitiveHdr[2]);
@@ -1356,7 +1349,7 @@ public class SearchDAOImpl implements SearchDAO {
                 // - there is a sensitive fq
                 final List<SolrQuery> sensitiveQ = new ArrayList<SolrQuery>();
                 if (!includeSensitive && dd.getSensitiveFq() != null) {
-                        sensitiveQ.addAll(splitQueries(queries, dd.getSensitiveFq(), sensitiveSOLRHdr, notSensitiveSOLRHdr));
+                    sensitiveQ.addAll(splitQueries(queries, dd.getSensitiveFq(), sensitiveSOLRHdr, notSensitiveSOLRHdr));
                 }
 
                 final AtomicInteger resultsCount = new AtomicInteger(0);
@@ -1741,45 +1734,6 @@ public class SearchDAOImpl implements SearchDAO {
         return count;
     }
 
-    private String[] maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values, Integer drUid_index, Integer lsid_index, NbnUserWhitelist nbnUserWhitelist) {
-        //check if whitelisted: if not, then may need to remove values
-        if (nbnUserWhitelist.hasWhitelistedSensitiveRecords) {
-            //check if data_resource_uid and lsid are in user's whitelist
-
-            String drUid = values[drUid_index];
-            String lsid = values[lsid_index];
-            //logger.info("Checking record with lsid=" + lsid + " and dr = " + drUid);
-            Boolean isWhitelistedRec = false;
-            if (nbnUserWhitelist.whitelistDataResTaxa.containsKey(lsid)) {
-                //logger.info("lsid is in whitelist");
-                ArrayList<String> listDs = nbnUserWhitelist.whitelistDataResTaxa.get(lsid);
-                if (listDs.contains(drUid)) {
-                    isWhitelistedRec = true;
-                }
-            }
-            if (!isWhitelistedRec) {
-                for (int i = 0; i < fields.length; i++) {
-                    if (fields[i].startsWith("sensitive_")) {
-                        if (values[i] != null && !values[i].isEmpty()) {
-                            values[i] = "";
-                        }
-                    }
-                }
-            }
-            if (isWhitelistedRec && whitelistedLicenseAnnotation != null && !whitelistedLicenseAnnotation.isEmpty()) {
-                for (int i = 0; i < fields.length; i++) {
-                    if (fields[i].equals("license") || fields[i].equals("license_p")) {
-                        if (values[i] != null && !values[i].isEmpty()) {
-                            values[i] = /* values[i] + " - " + */ whitelistedLicenseAnnotation;
-                        }
-                    }
-                }
-            }
-        }
-
-        return values;
-    }
-
     private String formatValue(Object value) {
         if (value instanceof Date) {
             return value == null ? "" : org.apache.commons.lang.time.DateFormatUtils.format((Date) value, "yyyy-MM-dd");
@@ -1825,7 +1779,6 @@ public class SearchDAOImpl implements SearchDAO {
             if (includeSensitive) {
                 //include raw latitude and longitudes
                 dFields = dFields.replaceFirst("decimalLatitude_p", "decimalLatitude,decimalLongitude,decimalLatitude_p").replaceFirst(",locality,", ",locality,sensitive_locality,");
-
             }
             dFields = nbnRemoveFields(dFields);
 
@@ -1896,8 +1849,7 @@ public class SearchDAOImpl implements SearchDAO {
             //append sensitive fields for the header only
             if ((!includeSensitive && dd.getSensitiveFq() != null) || nbnUserWhitelist.hasWhitelistedSensitiveRecords) { //** RR
                 //sensitive headers do not have a DwC name, always set getIndexFields dwcHeader=false
-                List<String>[] sensitiveHdr;
-                sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
+                List<String>[] sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
 
                 titles = org.apache.commons.lang3.ArrayUtils.addAll(titles, sensitiveHdr[2].toArray(new String[]{}));
             }
@@ -1907,7 +1859,6 @@ public class SearchDAOImpl implements SearchDAO {
             String[] header = org.apache.commons.lang3.ArrayUtils.addAll(titles, analysisHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, speciesListHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, qaTitles);
-
 
             //Create the Writer that will be used to format the records
             //construct correct RecordWriter based on the supplied fileType
@@ -1973,7 +1924,6 @@ public class SearchDAOImpl implements SearchDAO {
 
         return uidStats;
     }
-
 
     /**
      * Expand field abbreviations
@@ -2131,14 +2081,13 @@ public class SearchDAOImpl implements SearchDAO {
                 (nbnUserWhitelist.hasWhitelistedSensitiveRecords))  { //** RR
             //lookup for fields from sensitive queries
             sensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, sensitiveCassandraHdr);
+
             //use general fields when sensitive data is not permitted
             notSensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, notSensitiveCassandraHdr);
         } else {
             sensitiveFields = new String[0];
             notSensitiveFields = fields;
         }
-
-        //rework q and fq to separate whitelisted from non-whitelisted records, since actual writing is done in blackbox
 
         for (SolrQuery q : queries) {
             int startIndex = 0;
@@ -4406,8 +4355,6 @@ public class SearchDAOImpl implements SearchDAO {
         return list;
     }
 
-
-
     public StringBuilder getAllQAFields() {
         //include all assertions
         StringBuilder qasb = new StringBuilder();
@@ -4621,6 +4568,45 @@ public class SearchDAOImpl implements SearchDAO {
     }
 
     /** -----------------------NBN ADDED------------------ **/
+
+    private String[] maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values, Integer drUid_index, Integer lsid_index, NbnUserWhitelist nbnUserWhitelist) {
+        //check if whitelisted: if not, then may need to remove values
+        if (nbnUserWhitelist.hasWhitelistedSensitiveRecords) {
+            //check if data_resource_uid and lsid are in user's whitelist
+
+            String drUid = values[drUid_index];
+            String lsid = values[lsid_index];
+            //logger.info("Checking record with lsid=" + lsid + " and dr = " + drUid);
+            Boolean isWhitelistedRec = false;
+            if (nbnUserWhitelist.whitelistDataResTaxa.containsKey(lsid)) {
+                //logger.info("lsid is in whitelist");
+                ArrayList<String> listDs = nbnUserWhitelist.whitelistDataResTaxa.get(lsid);
+                if (listDs.contains(drUid)) {
+                    isWhitelistedRec = true;
+                }
+            }
+            if (!isWhitelistedRec) {
+                for (int i = 0; i < fields.length; i++) {
+                    if (fields[i].startsWith("sensitive_")) {
+                        if (values[i] != null && !values[i].isEmpty()) {
+                            values[i] = "";
+                        }
+                    }
+                }
+            }
+            if (isWhitelistedRec && whitelistedLicenseAnnotation != null && !whitelistedLicenseAnnotation.isEmpty()) {
+                for (int i = 0; i < fields.length; i++) {
+                    if (fields[i].equals("license") || fields[i].equals("license_p")) {
+                        if (values[i] != null && !values[i].isEmpty()) {
+                            values[i] = /* values[i] + " - " + */ whitelistedLicenseAnnotation;
+                        }
+                    }
+                }
+            }
+        }
+
+        return values;
+    }
 
     /**Added to make customisation possible **/
     protected String addCustomSensitiveFields(String requestedFieldsParam) {
