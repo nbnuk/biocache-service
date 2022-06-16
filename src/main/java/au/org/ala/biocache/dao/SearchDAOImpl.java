@@ -1783,7 +1783,7 @@ public class SearchDAOImpl implements SearchDAO {
                     }
                 }
 
-                maskSensitiveFieldsForNonWhitelistedTaxa(fields, values);
+                values = maskSensitiveFieldsForNonWhitelistedTaxa(fields, values);
 
                 rw.write(values);
 
@@ -1800,7 +1800,7 @@ public class SearchDAOImpl implements SearchDAO {
         return count;
     }
 
-    private void maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values) {
+    private String[] maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values) {
         //check if whitelisted: if not, then may need to remove values
         if (hasWhitelistedSensitiveRecords) {
             Integer drUid_index = 0, lsid_index = 0;
@@ -1841,6 +1841,8 @@ public class SearchDAOImpl implements SearchDAO {
                 }
             }
         }
+
+        return values;
     }
 
     private String formatValue(Object value) {
