@@ -171,8 +171,6 @@ public class SearchDAOImpl implements SearchDAO {
     protected Boolean hasWhitelistedSensitiveRecords;
     /* the user's whitelist */
     Map<String,ArrayList> whitelistDataResTaxa;
-    /* whitelist SOLR fq */
-    String whitelistFq;
 
     @Inject
     private RestOperations restTemplate;
@@ -467,7 +465,10 @@ public class SearchDAOImpl implements SearchDAO {
         return list1;
     }
 
-    protected void setWhitelistedDetails (DownloadDetailsDTO dd, DownloadRequestParams downloadParams) {
+    protected NbnUserWhitelist getWhitelistedDetails (DownloadDetailsDTO dd, DownloadRequestParams downloadParams) {
+        NbnUserWhitelist nbnUserWhitelist = new NbnUserWhitelist();
+        String whitelistFq = "";
+
         Map<String,?> user = null;
         if (dd.getEmail() != "") {
             user = authService.getUserDetails(dd.getEmail());
@@ -503,6 +504,7 @@ public class SearchDAOImpl implements SearchDAO {
                     }
                     whitelistFq += "))";
                 }
+
                 logger.info("whitelistFq = " + whitelistFq);
 
                 SolrQuery solrQueryHasSensitive = new SolrQuery();
@@ -526,6 +528,8 @@ public class SearchDAOImpl implements SearchDAO {
                 if (queryResponse.getResults().getNumFound() > 0) hasWhitelistedSensitiveRecords = true;
             }
         }
+        nbnUserWhitelist.whitelistFq = whitelistFq;
+        return nbnUserWhitelist;
     }
 
     /**
@@ -1063,7 +1067,7 @@ public class SearchDAOImpl implements SearchDAO {
 
             String requestedFieldsParam = getDownloadFields(downloadParams);
 
-            setWhitelistedDetails(dd, downloadParams);
+            NbnUserWhitelist nbnUserWhitelist = getWhitelistedDetails(dd, downloadParams);
 
             if (includeSensitive || hasWhitelistedSensitiveRecords ) {
                 //include raw latitude and longitudes
@@ -1868,7 +1872,7 @@ public class SearchDAOImpl implements SearchDAO {
         //stores the remaining limit for data resources that have a download limit
         Map<String, Integer> downloadLimit = new HashMap<>();
 
-        setWhitelistedDetails(dd, downloadParams);
+        NbnUserWhitelist nbnUserWhitelist = getWhitelistedDetails(dd, downloadParams);
 
         try {
             SolrQuery solrQuery = initSolrQuery(downloadParams, false, null);
@@ -2022,7 +2026,7 @@ public class SearchDAOImpl implements SearchDAO {
                         //add another fq to the search for data_resource_uid
                         downloadParams.setFq((String[]) ArrayUtils.add(originalFq, "data_resource_uid:" + dr));
                         resultsCount = downloadRecords(downloadParams, rw, downloadLimit, uidStats, fields, qaFields,
-                                resultsCount, dr, includeSensitive, dd, limit, analysisFields, speciesListFields);
+                                resultsCount, dr, includeSensitive, dd, limit, analysisFields, speciesListFields, nbnUserWhitelist);
                         if (fqBuilder.length() > 2) {
                             fqBuilder.append(" OR ");
                         }
@@ -2033,11 +2037,11 @@ public class SearchDAOImpl implements SearchDAO {
                     //add extra fq for the remaining records
                     downloadParams.setFq((String[]) ArrayUtils.add(originalFq, fqBuilder.toString()));
                     resultsCount = downloadRecords(downloadParams, rw, downloadLimit, uidStats, fields, qaFields,
-                            resultsCount, null, includeSensitive, dd, limit, analysisFields, speciesListFields);
+                            resultsCount, null, includeSensitive, dd, limit, analysisFields, speciesListFields, nbnUserWhitelist);
                 } else {
                     //download all at once
                     downloadRecords(downloadParams, rw, downloadLimit, uidStats, fields, qaFields, resultsCount,
-                            null, includeSensitive, dd, limit, analysisFields, speciesListFields);
+                            null, includeSensitive, dd, limit, analysisFields, speciesListFields, nbnUserWhitelist);
                 }
             } finally {
                 rw.finalise();
@@ -2154,7 +2158,7 @@ public class SearchDAOImpl implements SearchDAO {
     private int downloadRecords(DownloadRequestParams downloadParams, RecordWriterError writer,
                                 Map<String, Integer> downloadLimit, ConcurrentMap<String, AtomicInteger> uidStats,
                                 String[] fields, String[] qaFields, int resultsCount, String dataResource, boolean includeSensitive,
-                                DownloadDetailsDTO dd, boolean limit, String[] analysisLayers, String[] speciesListFields) throws Exception {
+                                DownloadDetailsDTO dd, boolean limit, String[] analysisLayers, String[] speciesListFields, NbnUserWhitelist nbnUserWhitelist) throws Exception {
         if (logger.isInfoEnabled()) {
             logger.info("download query: " + downloadParams.getQ());
         }
@@ -2195,8 +2199,8 @@ public class SearchDAOImpl implements SearchDAO {
         if (!includeSensitive && dd.getSensitiveFq() != null && !hasWhitelistedSensitiveRecords) { //** RR
             sensitiveQ = splitQueries(queries, dd.getSensitiveFq(), null, null);
         } else if (hasWhitelistedSensitiveRecords) {
-            logger.info("whitelist fq = " + whitelistFq);
-            sensitiveQ = splitQueries(queries, whitelistFq, null, null);
+            logger.info("whitelist fq = " + nbnUserWhitelist.whitelistFq);
+            sensitiveQ = splitQueries(queries, nbnUserWhitelist.whitelistFq, null, null);
         }
 
         final String[] sensitiveFields;
@@ -4701,5 +4705,11 @@ public class SearchDAOImpl implements SearchDAO {
     /**Added to make customisation possible **/
     protected String addCustomSensitiveFields(String requestedFieldsParam) {
         return requestedFieldsParam;
+    }
+
+    private class NbnUserWhitelist {
+        /* whitelist SOLR fq */
+        String whitelistFq = "";
+
     }
 }
