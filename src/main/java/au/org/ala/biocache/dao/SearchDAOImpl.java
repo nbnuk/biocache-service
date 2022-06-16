@@ -1663,6 +1663,14 @@ public class SearchDAOImpl implements SearchDAO {
         int count = 0;
         int record = 0;
 
+        //START - for NBN whitelisting
+        Integer drUid_index = 0, lsid_index = 0;
+        for (int i = 0; i < fields.length; i++) {
+            if (fields[i].equalsIgnoreCase("data_resource_uid")) drUid_index = i;
+            if (fields[i].equalsIgnoreCase("taxon_concept_lsid"))lsid_index = i;
+        }
+        //END - for NBN whitelisting
+
         for (SolrDocument sd : qr.getResults()) {
             if (sd.getFieldValue("data_resource_uid") != null && (!checkLimit || (checkLimit && resultsCount.intValue() < maxDownloadSize))) {
 
@@ -1783,7 +1791,7 @@ public class SearchDAOImpl implements SearchDAO {
                     }
                 }
 
-                values = maskSensitiveFieldsForNonWhitelistedTaxa(fields, values);
+                values = maskSensitiveFieldsForNonWhitelistedTaxa(fields, values, drUid_index, lsid_index);
 
                 rw.write(values);
 
@@ -1800,15 +1808,9 @@ public class SearchDAOImpl implements SearchDAO {
         return count;
     }
 
-    private String[] maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values) {
+    private String[] maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values, Integer drUid_index, Integer lsid_index) {
         //check if whitelisted: if not, then may need to remove values
         if (hasWhitelistedSensitiveRecords) {
-            Integer drUid_index = 0, lsid_index = 0;
-            for (int i = 0; i < fields.length; i++) {
-                if (fields[i].equalsIgnoreCase("data_resource_uid")) drUid_index = i;
-                if (fields[i].equalsIgnoreCase("taxon_concept_lsid"))lsid_index = i;
-            }
-
             //check if data_resource_uid and lsid are in user's whitelist
 
             String drUid = values[drUid_index];
