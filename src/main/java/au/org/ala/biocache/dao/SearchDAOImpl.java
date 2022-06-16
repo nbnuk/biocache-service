@@ -1663,12 +1663,6 @@ public class SearchDAOImpl implements SearchDAO {
         int count = 0;
         int record = 0;
 
-        Integer drUid_index = 0, lsid_index = 0;
-        for (int i = 0; i < fields.length; i++) {
-            if (fields[i].equalsIgnoreCase("data_resource_uid")) drUid_index = i;
-            if (fields[i].equalsIgnoreCase("taxon_concept_lsid"))lsid_index = i;
-        }
-
         for (SolrDocument sd : qr.getResults()) {
             if (sd.getFieldValue("data_resource_uid") != null && (!checkLimit || (checkLimit && resultsCount.intValue() < maxDownloadSize))) {
 
@@ -1789,41 +1783,7 @@ public class SearchDAOImpl implements SearchDAO {
                     }
                 }
 
-                //check if whitelisted: if not, then may need to remove values
-                if (hasWhitelistedSensitiveRecords) {
-                    //check if data_resource_uid and lsid are in user's whitelist
-
-                    String drUid = values[drUid_index];
-                    String lsid = values[lsid_index];
-                    //logger.info("Checking record with lsid=" + lsid + " and dr = " + drUid);
-                    Boolean isWhitelistedRec = false;
-                    if (whitelistDataResTaxa.containsKey(lsid)) {
-                        //logger.info("lsid is in whitelist");
-                        ArrayList<String> listDs = whitelistDataResTaxa.get(lsid);
-                        if (listDs.contains(drUid)) {
-                            isWhitelistedRec = true;
-                        }
-                    }
-                    if (!isWhitelistedRec) {
-                        for (int i = 0; i < fields.length; i++) {
-                            if (fields[i].startsWith("sensitive_")) {
-                                if (values[i] != null && !values[i].isEmpty()) {
-                                    values[i] = "";
-                                }
-                            }
-                        }
-                    }
-                    if (isWhitelistedRec && whitelistedLicenseAnnotation != null && !whitelistedLicenseAnnotation.isEmpty()) {
-                        for (int i = 0; i < fields.length; i++) {
-                            if (fields[i].equals("license") || fields[i].equals("license_p")) {
-                                if (values[i] != null && !values[i].isEmpty()) {
-                                    values[i] = /* values[i] + " - " + */ whitelistedLicenseAnnotation;
-                                }
-                            }
-                        }
-                    }
-
-                }
+                maskSensitiveFieldsForNonWhitelistedTaxa(fields, values);
 
                 rw.write(values);
 
@@ -1838,6 +1798,49 @@ public class SearchDAOImpl implements SearchDAO {
         }
         dd.updateCounts(count);
         return count;
+    }
+
+    private void maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values) {
+        //check if whitelisted: if not, then may need to remove values
+        if (hasWhitelistedSensitiveRecords) {
+            Integer drUid_index = 0, lsid_index = 0;
+            for (int i = 0; i < fields.length; i++) {
+                if (fields[i].equalsIgnoreCase("data_resource_uid")) drUid_index = i;
+                if (fields[i].equalsIgnoreCase("taxon_concept_lsid"))lsid_index = i;
+            }
+
+            //check if data_resource_uid and lsid are in user's whitelist
+
+            String drUid = values[drUid_index];
+            String lsid = values[lsid_index];
+            //logger.info("Checking record with lsid=" + lsid + " and dr = " + drUid);
+            Boolean isWhitelistedRec = false;
+            if (whitelistDataResTaxa.containsKey(lsid)) {
+                //logger.info("lsid is in whitelist");
+                ArrayList<String> listDs = whitelistDataResTaxa.get(lsid);
+                if (listDs.contains(drUid)) {
+                    isWhitelistedRec = true;
+                }
+            }
+            if (!isWhitelistedRec) {
+                for (int i = 0; i < fields.length; i++) {
+                    if (fields[i].startsWith("sensitive_")) {
+                        if (values[i] != null && !values[i].isEmpty()) {
+                            values[i] = "";
+                        }
+                    }
+                }
+            }
+            if (isWhitelistedRec && whitelistedLicenseAnnotation != null && !whitelistedLicenseAnnotation.isEmpty()) {
+                for (int i = 0; i < fields.length; i++) {
+                    if (fields[i].equals("license") || fields[i].equals("license_p")) {
+                        if (values[i] != null && !values[i].isEmpty()) {
+                            values[i] = /* values[i] + " - " + */ whitelistedLicenseAnnotation;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private String formatValue(Object value) {
