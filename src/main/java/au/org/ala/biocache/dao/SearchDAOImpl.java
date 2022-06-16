@@ -159,6 +159,7 @@ public class SearchDAOImpl implements SearchDAO {
     @Value("${download.max.completion.time:300000}")
     protected Long downloadMaxCompletionTime = 300000L;
 
+    //START - NBN FIELDS
     /* registry WS URL */
     @Value("${registry.url:http://collections.ala.org.au/ws}")
     protected String registryUrl;
@@ -175,6 +176,7 @@ public class SearchDAOImpl implements SearchDAO {
 
     @Inject
     private RestOperations restTemplate;
+    //END - NBN FIELDS
 
     public static final String NAMES_AND_LSID = "names_and_lsid";
     public static final String COMMON_NAME_AND_LSID = "common_name_and_lsid";
@@ -372,7 +374,6 @@ public class SearchDAOImpl implements SearchDAO {
 
         getMaxBooleanClauses();
 
-        if (whitelistedLicenseAnnotation.isEmpty()) whitelistedLicenseAnnotation = null;
     }
 
     public void refreshCaches() {
@@ -1462,10 +1463,10 @@ public class SearchDAOImpl implements SearchDAO {
                                 }
                                 int count = 0;
                                 if (sensitiveQ.contains(splitByFacetQuery)) {
-                                    count = processQueryResults(uidStats, sensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, true, whitelistedLicenseAnnotation);
+                                    count = processQueryResults(uidStats, sensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, true);
                                 } else {
                                     // write non-sensitive values into sensitive fields when not authorised for their sensitive values
-                                    count = processQueryResults(uidStats, notSensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, false, whitelistedLicenseAnnotation);
+                                    count = processQueryResults(uidStats, notSensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, false);
                                 }
                                 recordsForThread.addAndGet(count);
                                 // we have already set the Filter query the first time the query was constructed
@@ -1655,15 +1656,7 @@ public class SearchDAOImpl implements SearchDAO {
                                     AtomicInteger resultsCount, long maxDownloadSize, String[] analysisLayers,
                                     String[] speciesListFields,
                                     List<String> miscFields, Boolean sensitiveDataAllowed) {
-        return processQueryResults(uidStats, fields, qaFields, rw, qr, dd, checkLimit, resultsCount, maxDownloadSize, analysisLayers, speciesListFields, miscFields, sensitiveDataAllowed, "");
-    }
 
-    private int processQueryResults(ConcurrentMap<String, AtomicInteger> uidStats, String[] fields, String[] qaFields,
-                                    RecordWriter rw, QueryResponse qr, DownloadDetailsDTO dd, boolean checkLimit,
-                                    AtomicInteger resultsCount, long maxDownloadSize, String[] analysisLayers,
-                                    String[] speciesListFields,
-                                    List<String> miscFields, Boolean sensitiveDataAllowed,
-                                    String explainWhitelistedLicense) {
         //handle analysis layer intersections
         List<String[]> intersection = intersectResults(dd.getRequestParams().getLayersServiceUrl(), analysisLayers, qr.getResults());
 
@@ -1820,11 +1813,11 @@ public class SearchDAOImpl implements SearchDAO {
                             }
                         }
                     }
-                    if (isWhitelistedRec && explainWhitelistedLicense != null && !explainWhitelistedLicense.isEmpty()) {
+                    if (isWhitelistedRec && whitelistedLicenseAnnotation != null && !whitelistedLicenseAnnotation.isEmpty()) {
                         for (int i = 0; i < fields.length; i++) {
                             if (fields[i].equals("license") || fields[i].equals("license_p")) {
                                 if (values[i] != null && !values[i].isEmpty()) {
-                                    values[i] = /* values[i] + " - " + */ explainWhitelistedLicense;
+                                    values[i] = /* values[i] + " - " + */ whitelistedLicenseAnnotation;
                                 }
                             }
                         }
