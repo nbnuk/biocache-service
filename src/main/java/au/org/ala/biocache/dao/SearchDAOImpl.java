@@ -167,9 +167,6 @@ public class SearchDAOImpl implements SearchDAO {
     @Value("${download.whitelisted.licenseAnnotation:}")
     protected String whitelistedLicenseAnnotation;
 
-    /* does this user have access to sensitive records within this download? */
-    protected Boolean hasWhitelistedSensitiveRecords;
-
     @Inject
     private RestOperations restTemplate;
     //END - NBN FIELDS
@@ -467,6 +464,7 @@ public class SearchDAOImpl implements SearchDAO {
         NbnUserWhitelist nbnUserWhitelist = new NbnUserWhitelist();
         String whitelistFq = "";
         Map<String,ArrayList> whitelistDataResTaxa = new HashMap();
+        Boolean hasWhitelistedSensitiveRecords = false;
 
 
         Map<String,?> user = null;
@@ -530,6 +528,7 @@ public class SearchDAOImpl implements SearchDAO {
         }
         nbnUserWhitelist.whitelistFq = whitelistFq;
         nbnUserWhitelist.whitelistDataResTaxa = whitelistDataResTaxa;
+        nbnUserWhitelist.hasWhitelistedSensitiveRecords = hasWhitelistedSensitiveRecords;
         return nbnUserWhitelist;
     }
 
@@ -1070,7 +1069,7 @@ public class SearchDAOImpl implements SearchDAO {
 
             NbnUserWhitelist nbnUserWhitelist = getWhitelistedDetails(dd, downloadParams);
 
-            if (includeSensitive || hasWhitelistedSensitiveRecords ) {
+            if (includeSensitive || nbnUserWhitelist.hasWhitelistedSensitiveRecords ) {
                 //include raw latitude and longitudes
                 if (requestedFieldsParam.contains("decimalLatitude_p")) {
                     requestedFieldsParam = requestedFieldsParam.replaceFirst("decimalLatitude_p", "sensitive_latitude,sensitive_longitude,decimalLatitude_p");
@@ -1815,7 +1814,7 @@ public class SearchDAOImpl implements SearchDAO {
 
     private String[] maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values, Integer drUid_index, Integer lsid_index, NbnUserWhitelist nbnUserWhitelist) {
         //check if whitelisted: if not, then may need to remove values
-        if (hasWhitelistedSensitiveRecords) {
+        if (nbnUserWhitelist.hasWhitelistedSensitiveRecords) {
             //check if data_resource_uid and lsid are in user's whitelist
 
             String drUid = values[drUid_index];
@@ -1970,13 +1969,13 @@ public class SearchDAOImpl implements SearchDAO {
             }
 
             //append sensitive fields for the header only
-            if (!includeSensitive && dd.getSensitiveFq() != null && !hasWhitelistedSensitiveRecords) { //** RR
+            if (!includeSensitive && dd.getSensitiveFq() != null && !nbnUserWhitelist.hasWhitelistedSensitiveRecords) { //** RR
                 //sensitive headers do not have a DwC name, always set getIndexFields dwcHeader=false
                 List<String>[] sensitiveHdr;
                 sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
 
                 titles = org.apache.commons.lang3.ArrayUtils.addAll(titles, sensitiveHdr[2].toArray(new String[]{}));
-            } else if (hasWhitelistedSensitiveRecords) {
+            } else if (nbnUserWhitelist.hasWhitelistedSensitiveRecords) {
                 List<String>[] sensitiveHdr;
                 sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
 
@@ -2197,17 +2196,17 @@ public class SearchDAOImpl implements SearchDAO {
         // - not including all sensitive values
         // - there is a sensitive fq
         List<SolrQuery> sensitiveQ = new ArrayList<SolrQuery>();
-        if (!includeSensitive && dd.getSensitiveFq() != null && !hasWhitelistedSensitiveRecords) { //** RR
+        if (!includeSensitive && dd.getSensitiveFq() != null && !nbnUserWhitelist.hasWhitelistedSensitiveRecords) { //** RR
             sensitiveQ = splitQueries(queries, dd.getSensitiveFq(), null, null);
-        } else if (hasWhitelistedSensitiveRecords) {
+        } else if (nbnUserWhitelist.hasWhitelistedSensitiveRecords) {
             logger.info("whitelist fq = " + nbnUserWhitelist.whitelistFq);
             sensitiveQ = splitQueries(queries, nbnUserWhitelist.whitelistFq, null, null);
         }
 
         final String[] sensitiveFields;
         final String[] notSensitiveFields;
-        if ((!includeSensitive && dd.getSensitiveFq() != null && !hasWhitelistedSensitiveRecords) ||
-                (hasWhitelistedSensitiveRecords))  { //** RR
+        if ((!includeSensitive && dd.getSensitiveFq() != null && !nbnUserWhitelist.hasWhitelistedSensitiveRecords) ||
+                (nbnUserWhitelist.hasWhitelistedSensitiveRecords))  { //** RR
             //lookup for fields from sensitive queries
             sensitiveFields = org.apache.commons.lang3.ArrayUtils.addAll(fields, sensitiveCassandraHdr);
             //use general fields when sensitive data is not permitted
@@ -4713,7 +4712,10 @@ public class SearchDAOImpl implements SearchDAO {
         String whitelistFq = "";
 
         /* the user's whitelist */
-        Map<String,ArrayList> whitelistDataResTaxa = new HashMap<>();;
+        Map<String,ArrayList> whitelistDataResTaxa = new HashMap<>();
+
+        /* does this user have access to sensitive records within this download? */
+        Boolean hasWhitelistedSensitiveRecords;
 
     }
 }
