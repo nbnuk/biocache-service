@@ -460,77 +460,6 @@ public class SearchDAOImpl implements SearchDAO {
         return list1;
     }
 
-    protected NbnUserWhitelist getWhitelistedDetails (DownloadDetailsDTO dd, DownloadRequestParams downloadParams) {
-        NbnUserWhitelist nbnUserWhitelist = new NbnUserWhitelist();
-        String whitelistFq = "";
-        Map<String,ArrayList> whitelistDataResTaxa = new HashMap();
-        Boolean hasWhitelistedSensitiveRecords = false;
-
-
-        Map<String,?> user = null;
-        if (dd.getEmail() != "") {
-            user = authService.getUserDetails(dd.getEmail());
-        }
-
-        final String jsonUri = registryUrl + "/sensitiveAccess/" + (user == null? "-1" : user.get("userId")); //user is null if spatial(?) download. request doesn't include email, downloaded directly.
-        logger.info("Requesting whitelisting for user: " + jsonUri);
-        Map<String,Map> dataResourceTaxaWhitelist = new HashMap<>();
-        try {
-            dataResourceTaxaWhitelist = restTemplate.getForObject(jsonUri, Map.class);
-            logger.info(dataResourceTaxaWhitelist.toString());
-            logger.info("number of entities = " + dataResourceTaxaWhitelist.size());
-        } catch (Exception ex) {
-            logger.error("RestTemplate error: " + ex.getMessage(), ex);
-        }
-
-        //build SOLR fq from dataResourceTaxaWhitelist.dataResourceTaxa
-        //combine with existing query and see if no. of records returned > 0
-        //if so, then need to include sensitive fields in download, since some records will have these
-        hasWhitelistedSensitiveRecords = false;
-
-        if (dataResourceTaxaWhitelist.containsKey("dataResourceTaxa")) {
-            whitelistDataResTaxa = dataResourceTaxaWhitelist.get("dataResourceTaxa");
-            if (whitelistDataResTaxa.size() > 0) {
-                whitelistFq = "";
-                for (Map.Entry<String, ArrayList> entry : whitelistDataResTaxa.entrySet()) {
-                    if (whitelistFq.length() > 0) whitelistFq += " OR ";
-                    whitelistFq += "(lsid:" + entry.getKey() + " AND (";
-                    ArrayList<String> listDs = entry.getValue();
-                    for (Integer i = 0; i < listDs.size(); i++) {
-                        if (i > 0) whitelistFq += " OR ";
-                        whitelistFq += "data_resource_uid:" + listDs.get(i);
-                    }
-                    whitelistFq += "))";
-                }
-
-                logger.info("whitelistFq = " + whitelistFq);
-
-                SolrQuery solrQueryHasSensitive = new SolrQuery();
-                solrQueryHasSensitive.setQuery(downloadParams.getFormattedQuery());
-
-                String[] fq = downloadParams.getFormattedFq();
-                if (fq == null) fq = new String[0];
-                fq = org.apache.commons.lang3.ArrayUtils.addAll(fq, whitelistFq);
-
-                solrQueryHasSensitive.setFilterQueries(fq);
-
-                QueryResponse queryResponse = null;
-
-                try {
-                    queryResponse = runSolrQuery(solrQueryHasSensitive, null, 0, 0, "", "");
-                } catch (Exception ex) {
-                    logger.error("Error executing query with requestParams: " + solrQueryHasSensitive.toString(), ex);
-                }
-                logger.info("Whitelisted records = " + queryResponse.getResults().getNumFound());
-
-                if (queryResponse.getResults().getNumFound() > 0) hasWhitelistedSensitiveRecords = true;
-            }
-        }
-        nbnUserWhitelist.whitelistFq = whitelistFq;
-        nbnUserWhitelist.whitelistDataResTaxa = whitelistDataResTaxa;
-        nbnUserWhitelist.hasWhitelistedSensitiveRecords = hasWhitelistedSensitiveRecords;
-        return nbnUserWhitelist;
-    }
 
     /**
      * @return An instance of ExecutorService used to concurrently execute multiple endemic queries.
@@ -1898,11 +1827,7 @@ public class SearchDAOImpl implements SearchDAO {
                 dFields = dFields.replaceFirst("decimalLatitude_p", "decimalLatitude,decimalLongitude,decimalLatitude_p").replaceFirst(",locality,", ",locality,sensitive_locality,");
 
             }
-            //strip out these fields added to custom downloads from indexFields.txt - coordinateUncertaintyInMeters_p is added via SOLR since it is misleading for sensitive records (actually raw coordUncertainty)
-            dFields = dFields.replaceFirst("coordinateUncertaintyInMeters_p,","");
-            dFields = dFields.replaceFirst("coordinateUncertaintyInMeters,","");
-            dFields = dFields.replaceFirst("decimalLatitude,","");
-            dFields = dFields.replaceFirst("decimalLongitude,","");
+            dFields = nbnRemoveFields(dFields);
 
             StringBuilder sb = new StringBuilder(dFields);
             if (downloadParams.getExtra().length() > 0) {
@@ -1969,21 +1894,17 @@ public class SearchDAOImpl implements SearchDAO {
             }
 
             //append sensitive fields for the header only
-            if (!includeSensitive && dd.getSensitiveFq() != null && !nbnUserWhitelist.hasWhitelistedSensitiveRecords) { //** RR
+            if ((!includeSensitive && dd.getSensitiveFq() != null) || nbnUserWhitelist.hasWhitelistedSensitiveRecords) { //** RR
                 //sensitive headers do not have a DwC name, always set getIndexFields dwcHeader=false
-                List<String>[] sensitiveHdr;
-                sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
-
-                titles = org.apache.commons.lang3.ArrayUtils.addAll(titles, sensitiveHdr[2].toArray(new String[]{}));
-            } else if (nbnUserWhitelist.hasWhitelistedSensitiveRecords) {
                 List<String>[] sensitiveHdr;
                 sensitiveHdr = downloadFields.getIndexFields(sensitiveSOLRHdr, false, downloadParams.getLayersServiceUrl());
 
                 titles = org.apache.commons.lang3.ArrayUtils.addAll(titles, sensitiveHdr[2].toArray(new String[]{}));
             }
 
-            String[] header = org.apache.commons.lang3.ArrayUtils.add(titles, "Coordinate uncertainty - processed");
-            header = org.apache.commons.lang3.ArrayUtils.addAll(header, analysisHeaders);
+            titles = org.apache.commons.lang3.ArrayUtils.add(titles, "Coordinate uncertainty - processed");
+
+            String[] header = org.apache.commons.lang3.ArrayUtils.addAll(titles, analysisHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, speciesListHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, qaTitles);
 
@@ -2052,6 +1973,7 @@ public class SearchDAOImpl implements SearchDAO {
 
         return uidStats;
     }
+
 
     /**
      * Expand field abbreviations
@@ -2302,6 +2224,7 @@ public class SearchDAOImpl implements SearchDAO {
                                 }
                             }
 
+                            //START NBN FFTF - just insert this block
                             //NBN: sensitive records originalSensitiveValues.coordinateUncertaintyInMeters_p is overwriting the actual (cruder) coordinateUncertaintyInMeters_p
                             //TODO: this needs fixing (e.g by stashing the value into originalSensitiveValues.coordinateUncertaintyInMeters) but might have other side-effects e.g. for grid-derived coordinateUncertainties
                             //coordinateUncertaintyInMeters
@@ -2322,6 +2245,7 @@ public class SearchDAOImpl implements SearchDAO {
                                 dataToInsert.put(uuid, extra);
                                 extra[extraOffset] = coordinate_uncertainty;
                             }
+                            //END NBN FFTF - just insert this block
 
                             //increment the counters....
                             incrementCount(uidStats, sd.getFieldValue("institution_uid"));
@@ -2335,7 +2259,7 @@ public class SearchDAOImpl implements SearchDAO {
 
                 String[] newMiscFields;
                 if (sensitiveQ.contains(q)) {
-                    newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), sensitiveFields, qaFields, true, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert, whitelistedLicenseAnnotation);
+                    newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), sensitiveFields, qaFields, true, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert, whitelistedLicenseAnnotation);//FFTF: cant this be done another way as it requires a change to biocache-store
                 } else {
                     newMiscFields = au.org.ala.biocache.Store.writeToWriter(writer, uuids.toArray(new String[]{}), notSensitiveFields, qaFields, includeSensitive, (dd.getRequestParams() != null ? dd.getRequestParams().getIncludeMisc() : false), dd.getMiscFields(), dataToInsert);
                 }
@@ -4092,12 +4016,6 @@ public class SearchDAOImpl implements SearchDAO {
             //add all the counts based on the query value that was substituted
             String lsid = lftToGuid.get(facet);
             Integer count = facetQueries.get(facet);
-            if (count > qr.getResults().getNumFound()) {
-                //for species with 1 record with user issues flagged, getting count of 2.
-                //https://records-ws.nbnatlas.org/occurrences/taxaCount?guids=NBNSYS0000031910
-                //HACK sanity-check. Investigate further
-                count = Math.toIntExact(qr.getResults().getNumFound());
-            }
             if(lsid != null && count!= null)
                 counts.put(lsid,  count);
         }
@@ -4702,9 +4620,20 @@ public class SearchDAOImpl implements SearchDAO {
         return found;
     }
 
+    /** -----------------------NBN ADDED------------------ **/
+
     /**Added to make customisation possible **/
     protected String addCustomSensitiveFields(String requestedFieldsParam) {
         return requestedFieldsParam;
+    }
+
+    private String nbnRemoveFields(String dFields) {
+        //strip out these fields added to custom downloads from indexFields.txt - coordinateUncertaintyInMeters_p is added via SOLR since it is misleading for sensitive records (actually raw coordUncertainty)
+        dFields = dFields.replaceFirst("coordinateUncertaintyInMeters_p,","");
+        dFields = dFields.replaceFirst("coordinateUncertaintyInMeters,","");
+        dFields = dFields.replaceFirst("decimalLatitude,","");
+        dFields = dFields.replaceFirst("decimalLongitude,","");
+        return dFields;
     }
 
     private class NbnUserWhitelist {
@@ -4717,5 +4646,77 @@ public class SearchDAOImpl implements SearchDAO {
         /* does this user have access to sensitive records within this download? */
         Boolean hasWhitelistedSensitiveRecords;
 
+    }
+
+    protected NbnUserWhitelist getWhitelistedDetails (DownloadDetailsDTO dd, DownloadRequestParams downloadParams) {
+        NbnUserWhitelist nbnUserWhitelist = new NbnUserWhitelist();
+        String whitelistFq = "";
+        Map<String,ArrayList> whitelistDataResTaxa = new HashMap();
+        Boolean hasWhitelistedSensitiveRecords = false;
+
+
+        Map<String,?> user = null;
+        if (dd.getEmail() != "") {
+            user = authService.getUserDetails(dd.getEmail());
+        }
+
+        final String jsonUri = registryUrl + "/sensitiveAccess/" + (user == null? "-1" : user.get("userId")); //user is null if spatial(?) download. request doesn't include email, downloaded directly.
+        logger.info("Requesting whitelisting for user: " + jsonUri);
+        Map<String,Map> dataResourceTaxaWhitelist = new HashMap<>();
+        try {
+            dataResourceTaxaWhitelist = restTemplate.getForObject(jsonUri, Map.class);
+            logger.info(dataResourceTaxaWhitelist.toString());
+            logger.info("number of entities = " + dataResourceTaxaWhitelist.size());
+        } catch (Exception ex) {
+            logger.error("RestTemplate error: " + ex.getMessage(), ex);
+        }
+
+        //build SOLR fq from dataResourceTaxaWhitelist.dataResourceTaxa
+        //combine with existing query and see if no. of records returned > 0
+        //if so, then need to include sensitive fields in download, since some records will have these
+        hasWhitelistedSensitiveRecords = false;
+
+        if (dataResourceTaxaWhitelist.containsKey("dataResourceTaxa")) {
+            whitelistDataResTaxa = dataResourceTaxaWhitelist.get("dataResourceTaxa");
+            if (whitelistDataResTaxa.size() > 0) {
+                whitelistFq = "";
+                for (Map.Entry<String, ArrayList> entry : whitelistDataResTaxa.entrySet()) {
+                    if (whitelistFq.length() > 0) whitelistFq += " OR ";
+                    whitelistFq += "(lsid:" + entry.getKey() + " AND (";
+                    ArrayList<String> listDs = entry.getValue();
+                    for (Integer i = 0; i < listDs.size(); i++) {
+                        if (i > 0) whitelistFq += " OR ";
+                        whitelistFq += "data_resource_uid:" + listDs.get(i);
+                    }
+                    whitelistFq += "))";
+                }
+
+                logger.info("whitelistFq = " + whitelistFq);
+
+                SolrQuery solrQueryHasSensitive = new SolrQuery();
+                solrQueryHasSensitive.setQuery(downloadParams.getFormattedQuery());
+
+                String[] fq = downloadParams.getFormattedFq();
+                if (fq == null) fq = new String[0];
+                fq = org.apache.commons.lang3.ArrayUtils.addAll(fq, whitelistFq);
+
+                solrQueryHasSensitive.setFilterQueries(fq);
+
+                QueryResponse queryResponse = null;
+
+                try {
+                    queryResponse = runSolrQuery(solrQueryHasSensitive, null, 0, 0, "", "");
+                } catch (Exception ex) {
+                    logger.error("Error executing query with requestParams: " + solrQueryHasSensitive.toString(), ex);
+                }
+                logger.info("Whitelisted records = " + queryResponse.getResults().getNumFound());
+
+                if (queryResponse.getResults().getNumFound() > 0) hasWhitelistedSensitiveRecords = true;
+            }
+        }
+        nbnUserWhitelist.whitelistFq = whitelistFq;
+        nbnUserWhitelist.whitelistDataResTaxa = whitelistDataResTaxa;
+        nbnUserWhitelist.hasWhitelistedSensitiveRecords = hasWhitelistedSensitiveRecords;
+        return nbnUserWhitelist;
     }
 }
