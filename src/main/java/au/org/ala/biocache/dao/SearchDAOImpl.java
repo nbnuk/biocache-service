@@ -169,8 +169,6 @@ public class SearchDAOImpl implements SearchDAO {
 
     /* does this user have access to sensitive records within this download? */
     protected Boolean hasWhitelistedSensitiveRecords;
-    /* the user's whitelist */
-    Map<String,ArrayList> whitelistDataResTaxa;
 
     @Inject
     private RestOperations restTemplate;
@@ -468,6 +466,8 @@ public class SearchDAOImpl implements SearchDAO {
     protected NbnUserWhitelist getWhitelistedDetails (DownloadDetailsDTO dd, DownloadRequestParams downloadParams) {
         NbnUserWhitelist nbnUserWhitelist = new NbnUserWhitelist();
         String whitelistFq = "";
+        Map<String,ArrayList> whitelistDataResTaxa = new HashMap();
+
 
         Map<String,?> user = null;
         if (dd.getEmail() != "") {
@@ -529,6 +529,7 @@ public class SearchDAOImpl implements SearchDAO {
             }
         }
         nbnUserWhitelist.whitelistFq = whitelistFq;
+        nbnUserWhitelist.whitelistDataResTaxa = whitelistDataResTaxa;
         return nbnUserWhitelist;
     }
 
@@ -1467,10 +1468,10 @@ public class SearchDAOImpl implements SearchDAO {
                                 }
                                 int count = 0;
                                 if (sensitiveQ.contains(splitByFacetQuery)) {
-                                    count = processQueryResults(uidStats, sensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, true);
+                                    count = processQueryResults(uidStats, sensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, true, nbnUserWhitelist);
                                 } else {
                                     // write non-sensitive values into sensitive fields when not authorised for their sensitive values
-                                    count = processQueryResults(uidStats, notSensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, false);
+                                    count = processQueryResults(uidStats, notSensitiveFields, qaFields, concurrentWrapper, qr, dd, threadCheckLimit, resultsCount, maxDownloadSize, analysisFields, speciesListFields, miscFields, false, nbnUserWhitelist);
                                 }
                                 recordsForThread.addAndGet(count);
                                 // we have already set the Filter query the first time the query was constructed
@@ -1659,7 +1660,7 @@ public class SearchDAOImpl implements SearchDAO {
                                     RecordWriter rw, QueryResponse qr, DownloadDetailsDTO dd, boolean checkLimit,
                                     AtomicInteger resultsCount, long maxDownloadSize, String[] analysisLayers,
                                     String[] speciesListFields,
-                                    List<String> miscFields, Boolean sensitiveDataAllowed) {
+                                    List<String> miscFields, Boolean sensitiveDataAllowed, NbnUserWhitelist nbnUserWhitelist) {
 
         //handle analysis layer intersections
         List<String[]> intersection = intersectResults(dd.getRequestParams().getLayersServiceUrl(), analysisLayers, qr.getResults());
@@ -1795,7 +1796,7 @@ public class SearchDAOImpl implements SearchDAO {
                     }
                 }
 
-                values = maskSensitiveFieldsForNonWhitelistedTaxa(fields, values, drUid_index, lsid_index);
+                values = maskSensitiveFieldsForNonWhitelistedTaxa(fields, values, drUid_index, lsid_index, nbnUserWhitelist);
 
                 rw.write(values);
 
@@ -1812,7 +1813,7 @@ public class SearchDAOImpl implements SearchDAO {
         return count;
     }
 
-    private String[] maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values, Integer drUid_index, Integer lsid_index) {
+    private String[] maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values, Integer drUid_index, Integer lsid_index, NbnUserWhitelist nbnUserWhitelist) {
         //check if whitelisted: if not, then may need to remove values
         if (hasWhitelistedSensitiveRecords) {
             //check if data_resource_uid and lsid are in user's whitelist
@@ -1821,9 +1822,9 @@ public class SearchDAOImpl implements SearchDAO {
             String lsid = values[lsid_index];
             //logger.info("Checking record with lsid=" + lsid + " and dr = " + drUid);
             Boolean isWhitelistedRec = false;
-            if (whitelistDataResTaxa.containsKey(lsid)) {
+            if (nbnUserWhitelist.whitelistDataResTaxa.containsKey(lsid)) {
                 //logger.info("lsid is in whitelist");
-                ArrayList<String> listDs = whitelistDataResTaxa.get(lsid);
+                ArrayList<String> listDs = nbnUserWhitelist.whitelistDataResTaxa.get(lsid);
                 if (listDs.contains(drUid)) {
                     isWhitelistedRec = true;
                 }
@@ -4710,6 +4711,9 @@ public class SearchDAOImpl implements SearchDAO {
     private class NbnUserWhitelist {
         /* whitelist SOLR fq */
         String whitelistFq = "";
+
+        /* the user's whitelist */
+        Map<String,ArrayList> whitelistDataResTaxa = new HashMap<>();;
 
     }
 }
