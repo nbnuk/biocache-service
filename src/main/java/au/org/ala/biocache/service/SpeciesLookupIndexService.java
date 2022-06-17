@@ -126,17 +126,17 @@ public class SpeciesLookupIndexService implements SpeciesLookupService {
             List<String> lsids = new ArrayList<String>();
             if(nsr != null) {
                 LinnaeanRankClassification classification = nsr.getRankClassification();
-                String taxon_rank = "";
-                if (nsr.getRank() != null) taxon_rank = nsr.getRank().name();
+                String taxon_rank = ""; //nbn
+                if (nsr.getRank() != null) taxon_rank = nsr.getRank().name(); //nbn
                 lsids.add(classification.getGid());
                 lsids.add(classification.getFid());
                 lsids.add(classification.getSid());
                 result = new String[]{
-                        guid,
+                        guid, //nbn
                         classification.getScientificName(),
                         classification.getAuthorship(),
-                        classification.getNomenclaturalStatus(),
-                        taxon_rank,
+                        classification.getNomenclaturalStatus(), //nbn
+                        taxon_rank, //nbn
                         classification.getKingdom(),
                         classification.getPhylum(),
                         classification.getKlass(),
