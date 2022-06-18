@@ -14,8 +14,6 @@
  ***************************************************************************/
 package au.org.ala.biocache.web;
 
-import au.org.ala.biocache.Config;
-import au.org.ala.biocache.config.AppConfig;
 import au.org.ala.biocache.dao.PersistentQueueDAO;
 import au.org.ala.biocache.dao.SearchDAO;
 import au.org.ala.biocache.dto.DownloadDetailsDTO;
@@ -86,9 +84,6 @@ public class DownloadController extends AbstractSecureController {
 
     @Inject
     protected DownloadService downloadService;
-
-    @Inject
-    protected AppConfig appConfig;
 
     /**
      * Retrieves all the downloads that are on the queue
@@ -224,7 +219,6 @@ public class DownloadController extends AbstractSecureController {
         //get query (max) count for queue priority
         requestParams.setPageSize(0);
         requestParams.setFacet(false);
-        requestParams.setIncludeMultivalues(appConfig.getDownloadMultivalue());
         SolrDocumentList result = searchDAO.findByFulltext(requestParams);
         dd.setTotalRecords(result.getNumFound());
 

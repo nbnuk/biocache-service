@@ -1,18 +1,18 @@
 package au.org.ala.biocache.config;
 
+import au.org.ala.biocache.dto.DownloadRequestParams;
 import au.org.ala.biocache.index.IndexDAO;
 import au.org.ala.biocache.index.SolrIndexDAO;
-import au.org.ala.biocache.service.RestartDataService;
-import au.org.ala.biocache.service.SpeciesLookupIndexService;
-import au.org.ala.biocache.service.SpeciesLookupRestService;
-import au.org.ala.biocache.service.SpeciesLookupService;
+import au.org.ala.biocache.service.*;
 import io.netty.util.internal.InternalThreadLocalMap;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.context.support.AbstractMessageSource;
 import org.springframework.web.client.RestOperations;
 
@@ -57,14 +57,6 @@ public class AppConfig {
     @Value("${facet.default:true}")
     protected Boolean facetDefault;
 
-    //NBN - event date days are not sensitive
-    @Value("${sensitive.date.day:true}")
-    protected Boolean sensitiveDateDay;
-
-    //NBN include multivalue fields (|-delimited) in downloads
-    @Value("${download.multivalue:false}")
-    protected Boolean downloadMultivalue;
-
     //Set RestartDataService.dir before classes using RestartDataService are instantiated.
     @Value("${restart.data.dir:/tmp}")
     public void setDatabase(String dir) {
@@ -72,7 +64,6 @@ public class AppConfig {
         RestartDataService.dir = dir;
     }
 
-    public Boolean getDownloadMultivalue() { return downloadMultivalue; }
 
     protected SpeciesLookupService getSpeciesLookupRestService() {
         logger.info("Initialising rest-based species lookup services.");
