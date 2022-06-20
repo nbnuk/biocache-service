@@ -531,6 +531,41 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
         writeQueryToStream(dd, requestParams, ip, out, includeSensitive, fromIndex, limit, zip, getOfflineThreadPoolExecutor(), null);
     }
 
+    protected ConcurrentMap<String, AtomicInteger> nbnBuildUidStatsForMap(DownloadRequestParams requestParams) throws Exception{
+        SpatialSearchRequestParams searchParams = requestParams;
+        Map<String, Integer> sources = searchDAO.getSourcesForQuery(requestParams);
+        ConcurrentMap<String, AtomicInteger> uidStats = new ConcurrentHashMap<>();
+        for (Map.Entry<String, Integer> entry : sources.entrySet()) {
+            uidStats.put(entry.getKey(), new AtomicInteger(entry.getValue()));
+        }
+        return uidStats;
+    }
+
+    private void nbnAddMapImage(DownloadDetailsDTO dd, DownloadRequestParams requestParams, OptionalZipOutputStream sp, String filename) throws Exception{
+        try {
+            String mapParams = requestParams.getMapLayoutParams();
+            List<NameValuePair> listParams = URLEncodedUtils.parse(new URI("http://ignore.com?" + mapParams), "UTF-8");
+            Map<String, String> mappedParams = listParams.stream().collect(
+                    Collectors.toMap(NameValuePair::getName, NameValuePair::getValue));
+            String pathWithoutExtension = removeExtension(dd.getFileLocation());
+            String mapImgSourcePath =  pathWithoutExtension + "." + mappedParams.get("format");
+            File file = new File(mapImgSourcePath);
+            FileInputStream fis = new FileInputStream(file);
+            String mapImgPath =  filename + "." + mappedParams.get("format");
+            sp.putNextEntry(mapImgPath);
+            byte[] bytes = new byte[1024];
+            int length;
+            while ((length = fis.read(bytes)) >= 0) {
+                sp.write(bytes, 0, length);
+            }
+            fis.close();
+            file.delete(); //tidy up original map image file
+        } catch (IOException e) {
+            logger.error(e.getMessage(), e);
+        }
+        sp.closeEntry();
+    }
+
     /**
      * Writes the supplied download to the supplied output stream. It will
      * include all the appropriate citations etc.
@@ -547,6 +582,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
     public void writeQueryToStream(DownloadDetailsDTO dd, DownloadRequestParams requestParams, String ip,
                                    OutputStream out, boolean includeSensitive, boolean fromIndex, boolean limit, boolean zip, ExecutorService parallelExecutor, List<CreateDoiResponse> doiResponseList)
             throws Exception {
+        boolean nbnMapDownload = requestParams.getFileType().equals("map");
         afterInitialisation();
         String filename = requestParams.getFile();
         String originalParams = requestParams.toString();
@@ -557,7 +593,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
         try(OptionalZipOutputStream sp = new OptionalZipOutputStream(
                 zip ? OptionalZipOutputStream.Type.zipped : OptionalZipOutputStream.Type.unzipped, new CloseShieldOutputStream(out), maxMB);) {
             String suffix = requestParams.getFileType().equals("shp") ? "csv" : requestParams.getFileType();
-            if (!requestParams.getFileType().equals("map")) {
+            if (!nbnMapDownload) {
                 sp.putNextEntry(filename + "." + suffix);
                 // put the facets
                 if ("all".equals(requestParams.getQa())) {
@@ -569,7 +605,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
             
             final ConcurrentMap<String, AtomicInteger> uidStats;
 
-            if (!requestParams.getFileType().equals("map")) {
+            if (!nbnMapDownload) {
                 if (fromIndex) {
                     uidStats = searchDAO.writeResultsFromIndexToStream(requestParams, sp, includeSensitive, dd, limit, parallelExecutor);
                 } else {
@@ -577,12 +613,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                 }
                 sp.closeEntry();
             } else {
-                SpatialSearchRequestParams searchParams = requestParams;
-                Map<String, Integer> sources = searchDAO.getSourcesForQuery(requestParams);
-                uidStats = new ConcurrentHashMap<>();
-                for (Map.Entry<String, Integer> entry : sources.entrySet()) {
-                    uidStats.put(entry.getKey(), new AtomicInteger(entry.getValue()));
-                }
+                uidStats =  nbnBuildUidStatsForMap(requestParams);
             }
 
             // add the readme for the Shape file header mappings if necessary
@@ -680,29 +711,8 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                         logger.debug("Not adding citation. Enabled: " + citationsEnabled + " uids: " + uidStats);
                     }
                 }
-                if (requestParams.getFileType().equals("map")) {
-                    try {
-                        String mapParams = requestParams.getMapLayoutParams();
-                        List<NameValuePair> listParams = URLEncodedUtils.parse(new URI("http://ignore.com?" + mapParams), "UTF-8");
-                        Map<String, String> mappedParams = listParams.stream().collect(
-                                Collectors.toMap(NameValuePair::getName, NameValuePair::getValue));
-                        String pathWithoutExtension = removeExtension(dd.getFileLocation());
-                        String mapImgSourcePath =  pathWithoutExtension + "." + mappedParams.get("format");
-                        File file = new File(mapImgSourcePath);
-                        FileInputStream fis = new FileInputStream(file);
-                        String mapImgPath =  filename + "." + mappedParams.get("format");
-                        sp.putNextEntry(mapImgPath);
-                        byte[] bytes = new byte[1024];
-                        int length;
-                        while ((length = fis.read(bytes)) >= 0) {
-                            sp.write(bytes, 0, length);
-                        }
-                        fis.close();
-                        file.delete(); //tidy up original map image file
-                    } catch (IOException e) {
-                        logger.error(e.getMessage(), e);
-                    }
-                    sp.closeEntry();
+                if (nbnMapDownload) {
+                    nbnAddMapImage(dd, requestParams, sp, filename);
                 }
 
                 // online downloads will not have a file location or request params set
@@ -754,7 +764,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                 sp.closeEntry();
 
                 // Add headings file, listing information about the headings
-                if (headingsEnabled && !requestParams.getFileType().equals("map")) {
+                if (headingsEnabled && !nbnMapDownload) {
                     // add the citations for the supplied uids
                     sp.putNextEntry("headings.csv");
                     try {
@@ -765,7 +775,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
                     sp.closeEntry();
                 } else {
                     if (logger.isDebugEnabled()) {
-                        logger.debug("Not adding header. Enabled: " + headingsEnabled + " type: " + requestParams.getFileType() + " uids: " + uidStats);
+                        logger.debug("Not adding header. Enabled: " + headingsEnabled + " uids: " + uidStats);
                     }
                 }
 
@@ -1186,8 +1196,14 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
         }
     }
 
-    public boolean createMapImage(DownloadRequestParams requestParams,
+    public boolean nbnCreateMapImage(DownloadRequestParams requestParams,
                                   HttpServletRequest request, DownloadDetailsDTO dd) {
+
+        //!!!!!*********when upgrade to biocache-service V3,
+        // wmsController.generatePublicationMapImage wont exist and map download
+        //wont be supported until its reimplemented. This method will need to be
+        //disabled by returning false
+        //return false;
 
         String mapParams = requestParams.getMapLayoutParams();
 

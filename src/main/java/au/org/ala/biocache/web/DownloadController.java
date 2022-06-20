@@ -236,7 +236,7 @@ public class DownloadController extends AbstractSecureController {
             status.put("downloadUrl", downloadService.biocacheDownloadUrl);
             status.put("status", "running");
             status.put("message", "Map");
-            boolean imgOk = downloadService.createMapImage(requestParams, request, dd);
+            boolean imgOk = downloadService.nbnCreateMapImage(requestParams, request, dd);
             if (!imgOk) {
                 status.put("status", "failed");
                 status.put("message", "Failed to create map image.");
