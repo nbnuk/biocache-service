@@ -38,6 +38,7 @@
         <context:exclude-filter type="assignable" expression="au.org.ala.biocache.service.EmailService"/>
         <context:exclude-filter type="assignable" expression="au.org.ala.biocache.web.OccurrenceController"/>
         <context:exclude-filter type="assignable" expression="au.org.ala.biocache.web.DownloadController"/>
+        <context:exclude-filter type="assignable" expression="au.org.ala.biocache.web.ExploreController"/>
     </context:component-scan>
 
 <!--    <context:component-scan base-package="au.org.ala.biocache" />-->

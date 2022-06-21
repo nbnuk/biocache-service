@@ -190,13 +190,8 @@ public class ExploreController {
         String oldName = null;
         String kingdom = null;
         //set the counts an indent levels for all the species groups
-        String last_sg = "ALL_SPECIES";
-        String last_sg_parent = "";
         for(au.org.ala.biocache.vocab.SpeciesGroup sg : sgs){
             logger.debug("name: " + sg.name() + " parent: " +sg.parent());
-            if (last_sg.equalsIgnoreCase(sg.name()) && last_sg_parent.equalsIgnoreCase(sg.parent())) {
-                logger.debug("skipping as duplicate");
-            } else {
                 int level = 3;
                 SpeciesGroupDTO sdto = new SpeciesGroupDTO();
                 sdto.setName(sg.name());
@@ -219,9 +214,6 @@ public class ExploreController {
                 sdto.setSpeciesCount(counts[1]);
                 speciesGroups.add(sdto);
             }
-            last_sg = sg.name();
-            last_sg_parent = sg.parent();
-        }
         return speciesGroups;
 	}
     
