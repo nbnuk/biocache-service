@@ -10,6 +10,7 @@ import org.geotools.geometry.GeneralDirectPosition;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.operation.DefaultCoordinateOperationFactory;
 import org.opengis.geometry.DirectPosition;
+import org.opengis.referencing.crs.CRSAuthorityFactory;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import org.opengis.referencing.operation.CoordinateOperation;
 import org.springframework.stereotype.Controller;
@@ -266,8 +267,8 @@ public class WMSOSGridController {
      *
      * Default behaviour for zoom levels
      *
-     * 313km - just show 10km grids
-     * 156km  - just show 10km grids
+     * 313km - just show 100km grids
+     * 156km  - show 10km grids & 50km grids
      * 78km  - just show 10km grids
      * 39km - 1km grids (TODO  - show 2km grids as well)
      * 19km - 1km grids (TODO  - show 2km grids as well)
@@ -328,7 +329,10 @@ public class WMSOSGridController {
             if(boundingBoxSizeInKm >= 1000 ) {
                 facets = new String[]{"grid_ref_100000"};
                 buff = 1.0;
-            } else if(boundingBoxSizeInKm > 78 && boundingBoxSizeInKm <1000 ){
+            } else if(boundingBoxSizeInKm > 156 && boundingBoxSizeInKm <1000 ){
+                facets = new String[]{"grid_ref_50000"};
+                buff = 0.75;
+            } else if(boundingBoxSizeInKm > 78 && boundingBoxSizeInKm <=156 ){
                 facets = new String[]{"grid_ref_10000"};
                 buff = 0.75;
             } else if(boundingBoxSizeInKm > 39 && boundingBoxSizeInKm <= 78) {
@@ -343,13 +347,46 @@ public class WMSOSGridController {
             }
         } else if ("10kgrid".equals(wmsEnv.gridres)){
             facets = new String[]{"grid_ref_10000"};
-            buff = 0.75; //no problems with buff 1.0
+            buff = 0.75;
+            //fixed_* used by EasyMap as of Nov 2019
+        } else if ("fixed_50km".equals(wmsEnv.gridres)) {
+            facets = new String[]{"grid_ref_10000","grid_ref_50000"}; //show 10km grid as well
+            buff = 0.75;
+        } else if ("fixed_10km".equals(wmsEnv.gridres)) {
+            facets = new String[]{"grid_ref_10000"};
+            buff = 0.75;
+        } else if ("fixed_2km".equals(wmsEnv.gridres)) {
+            facets = new String[]{"grid_ref_2000"};
+            buff = 0.05;
+        } else if ("fixed_100m".equals(wmsEnv.gridres)) {
+            facets = new String[]{"grid_ref_100"};
+            buff = 0.05;
+        } else if ("fixed_singlegrid".equals(wmsEnv.gridres)){ //to preserve legacy EasyMap display
+            if(boundingBoxSizeInKm >= 1000 ) {
+                facets = new String[]{"grid_ref_100000"};
+                buff = 1.0;
+            } else if(boundingBoxSizeInKm > 78 && boundingBoxSizeInKm < 1000 ){
+                facets = new String[]{"grid_ref_10000"};
+                buff = 0.75;
+            } else if(boundingBoxSizeInKm > 39 && boundingBoxSizeInKm <= 78) {
+                facets = new String[]{"grid_ref_2000"};
+                buff = 0.05;
+            } else if(boundingBoxSizeInKm > 8 && boundingBoxSizeInKm <= 39) {
+                facets = new String[]{"grid_ref_1000"};
+                buff = 0.05;
+            } else {
+                facets = new String[]{"grid_ref_100"};
+                buff = 0.05;
+            }
         } else {
             //variable grid
             if(boundingBoxSizeInKm >= 1000 ) {
                 facets = new String[]{"grid_ref_100000"};
                 buff = 1.0;
-            } else if(boundingBoxSizeInKm > 39 && boundingBoxSizeInKm < 1000 ){
+            } else if(boundingBoxSizeInKm > 156 && boundingBoxSizeInKm < 1000 ){
+                facets = new String[]{"grid_ref_10000", "grid_ref_50000"};
+                buff = 0.75;
+            } else if(boundingBoxSizeInKm > 39 && boundingBoxSizeInKm <= 156 ){
                 facets = new String[]{"grid_ref_10000"};
                 buff = 0.75;
             } else if(boundingBoxSizeInKm >= 19 && boundingBoxSizeInKm <= 39){
@@ -428,8 +465,20 @@ public class WMSOSGridController {
             public int compare(String o1, String o2) {
                 if(o1.length() > o2.length())
                     return 1;
-                if(o1.length() == o2.length())
-                    return 0;
+                if(o1.length() == o2.length()) {
+                    if ((o1.length() > 1) && (o2.length() > 1)) {
+                        int check_for_quads = o1.substring(o1.length() - 2).compareTo(o2.substring(o2.length() -2));
+                        if (check_for_quads > 0) {
+                            return -1;
+                        } else if (check_for_quads < 0) {
+                            return 1;
+                        } else {
+                            return 0;
+                        }
+                    } else {
+                        return 0;
+                    }
+                }
                 return -1;
             }
         });
@@ -459,7 +508,7 @@ public class WMSOSGridController {
             //grid lines are rendered after cell fills
             renderGridLines(wmsImg, linesToRender, outlineColour);
         }
-        
+
         if (wmsImg != null && wmsImg.g != null) {
             wmsImg.g.dispose();
             try {
@@ -508,7 +557,7 @@ public class WMSOSGridController {
 
         int easting = gr.easting();
         int northing = gr.northing();
-        int gridSize = (Integer) gr.coordinateUncertainty().get();
+        int gridSize = (Integer) gr.gridSize().get();
 
         //coordinates in easting / northing of the nearest 10km grid to the bottom,left of this tile
         Integer minEastingOfGridCell  = easting; //may need to use the minimum of each
@@ -536,10 +585,13 @@ public class WMSOSGridController {
             color = wmsEnv.colour;
         } else {
             if(gridSize == 100000){
-                color = 0xFFFFFF00; //1km grids yellow
+                color = 0xFF03FFFB; //100km grids cyan
+            }
+            else if(gridSize == 50000){
+                color = 0xFFFF8D00; //50km grids orange
             }
             else if(gridSize == 10000){
-                color = 0xFFFFFF00; //1km grids yellow
+                color = 0xFFFFFF00; //10km grids yellow
             }
             else if(gridSize == 2000){
                 color = 0xFF0000FF; //blue
@@ -699,8 +751,9 @@ public class WMSOSGridController {
 
         try {
 
-            CoordinateReferenceSystem sourceCRS = CRS.decode(sourceCRSString);
-            CoordinateReferenceSystem targetCRS = CRS.decode(targetCRSString);
+            CRSAuthorityFactory factory = CRS.getAuthorityFactory(true);
+            CoordinateReferenceSystem sourceCRS = factory.createCoordinateReferenceSystem(sourceCRSString);
+            CoordinateReferenceSystem targetCRS = factory.createCoordinateReferenceSystem(targetCRSString);
             CoordinateOperation transformOp = new DefaultCoordinateOperationFactory().createOperation(sourceCRS, targetCRS);
             GeneralDirectPosition directPosition = new GeneralDirectPosition(x, y);
             DirectPosition latLongInTargetCRS = transformOp.getMathTransform().transform(directPosition, null);

@@ -278,6 +278,25 @@ public class DownloadController extends AbstractSecureController {
             status.put("status", "inQueue");
             status.put("queueSize", persistentQueueDAO.getTotalDownloads());
             status.put("statusUrl", downloadService.webservicesRoot + "/occurrences/offline/status/" + d.getUniqueId());
+        } else if (requestParams.getFileType().equalsIgnoreCase("map")) {
+            File file = new File(downloadService.biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + "map");
+            FileUtils.forceMkdir(file.getParentFile());
+            status.put("downloadUrl", downloadService.biocacheDownloadUrl);
+            status.put("status", "running");
+            status.put("message", "Map");
+            boolean imgOk = downloadService.nbnCreateMapImage(requestParams, request, dd);
+            if (!imgOk) {
+                status.put("status", "failed");
+                status.put("message", "Failed to create map image.");
+                status.put("error", "Failed to create map image.");
+            } else {
+
+                //hook into normal download process to generate citations.csv and readme.html files and zip everything.
+                persistentQueueDAO.addDownloadToQueue(dd);
+                status.put("status", "finished");
+                status.put("queueSize", persistentQueueDAO.getTotalDownloads());
+                status.put("statusUrl", downloadService.webservicesRoot + "/occurrences/offline/status/" + dd.getUniqueId());
+            }
         } else if (dd.getTotalRecords() > downloadService.dowloadOfflineMaxSize) {
             //identify this download as too large
             File file = new File(downloadService.biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + "tooLarge");

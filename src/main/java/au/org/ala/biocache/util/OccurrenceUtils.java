@@ -19,6 +19,8 @@ import au.org.ala.biocache.model.FullRecord;
 import au.org.ala.biocache.model.Location;
 import au.org.ala.biocache.parser.ProcessedValue;
 import org.springframework.stereotype.Component;
+import scala.Option;
+import scala.Tuple2;
 
 import java.util.List;
 import java.util.Map;
@@ -36,15 +38,52 @@ public class OccurrenceUtils {
     static public FullRecord[] getAllVersionsByUuid(String uuid, Boolean includeSensitive) {
         FullRecord [] occ = Store.getAllVersionsByUuid(uuid, includeSensitive);
 
+        boolean isGeneralised = false;
+        boolean isProcessed = true;
         if (occ != null) {
+            int idx = 0;
             for (FullRecord fr : occ) {
                 Location loc = fr.getLocation();
                 if (loc != null && "null,null,null,null".equals(loc.getBbox())) {
                     loc.setBbox(null);
                 }
+                if (idx == 1) {
+                    au.org.ala.biocache.model.Occurrence processed = fr.getOccurrence();
+                    String generalisations = processed.getDataGeneralizations();
+                    if (generalisations != null) {
+                        if (generalisations != "" && !generalisations.contains("already generalised")) {
+                            isGeneralised = true;
+                        }
+                    }
+                }
+                idx++;
+            }
+            if (isGeneralised) { //check record has been processed
+                Location loc = occ[0].getLocation();
+                if (loc != null) {
+                    //if (any) raw values = originalsensitivevalues -> then record not processed so do not return it
+                    au.org.ala.biocache.model.Occurrence raw = occ[0].getOccurrence();
+                    scala.collection.immutable.Map<String, String> origSensitiveVals = raw.getOriginalSensitiveValues();
+                    scala.collection.Iterator iter = origSensitiveVals.iterator();
+                    while (iter.hasNext()) {
+                        scala.Tuple2 sv = (Tuple2) iter.next();
+                        String keySensitive = (String) sv._1;
+                        String valSensitive = (String) sv._2;
+                        String keyRaw = keySensitive.replace("_p","");
+                        if (loc.hasProperty(keyRaw)) {
+                            Option<String> valRaw = loc.getProperty(keyRaw);
+                            if (valRaw.isDefined()) {
+                                if (valRaw.get().equals(valSensitive)) {
+                                    isProcessed = false;
+                                    loc.setProperty(keyRaw,"");
+                                }
+                            }
+                        }
+                    }
+                    if (!isProcessed) occ[0].setLocation(loc);
+                }
             }
         }
-
         return occ;
     }
 

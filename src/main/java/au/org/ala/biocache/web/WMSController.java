@@ -1707,6 +1707,90 @@ public class WMSController extends AbstractSecureController{
             return;
         }
 
+        int[] heightWidth = getExtentsWidthHeight(bboxString, srs, extents, widthMm, dpi);
+        int height = heightWidth[0];
+        int width = heightWidth[1];
+
+        BufferedImage img = generatePublicationMapImage(
+                 requestParams,
+                 format,
+                 extents,
+                 bboxString,
+                 widthMm,
+                 pointRadiusMm,
+                 pradiusPx,
+                 pointColour,
+                 env,
+                 srs,
+                 pointOpacity,
+                 baselayer,
+                 scale,
+                 dpi,
+                 baselayerStyle,
+         outlinePoints,
+         outlineColour,
+         fileName,
+         baseMap
+            );
+
+
+        //if filename supplied, force a download
+        if (fileName != null) {
+            response.setContentType("application/octet-stream");
+            response.setHeader("Content-Description", "File Transfer");
+            response.setHeader("Content-Disposition", "attachment; filename=" + fileName);
+            response.setHeader("Content-Transfer-Encoding", "binary");
+        } else if (format.equalsIgnoreCase("png")) {
+            response.setContentType("image/png");
+        } else {
+            response.setContentType("image/jpeg");
+        }
+        response.setHeader("Cache-Control", wmsCacheControlHeaderPublicOrPrivate + ", max-age=" + wmsCacheControlHeaderMaxAge);
+        response.setHeader("ETag", wmsETag.get());
+
+        try {
+            if (format.equalsIgnoreCase("png")) {
+                OutputStream os = response.getOutputStream();
+                ImageIO.write(img, format, os);
+                os.close();
+            } else {
+                //handle jpeg + BufferedImage.TYPE_INT_ARGB
+                BufferedImage img2;
+                Graphics2D c2;
+                (c2 = (Graphics2D) (img2 = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)).getGraphics()).drawImage(img, 0, 0, Color.WHITE, null);
+                c2.dispose();
+                OutputStream os = response.getOutputStream();
+                ImageIO.write(img2, format, os);
+                os.close();
+            }
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+        }
+    }
+
+    public BufferedImage generatePublicationMapImage(
+            SpatialSearchRequestParams requestParams,
+            String format,
+            String extents,
+            String bboxString,
+            Double widthMm,
+            Double pointRadiusMm,
+            Integer pradiusPx,
+            String pointColour,
+            String env,
+            String srs,
+            Double pointOpacity,
+            String baselayer,
+            String scale,
+            Integer dpi,
+            String baselayerStyle,
+            boolean outlinePoints,
+            String outlineColour,
+            String fileName,
+            String baseMap
+            ) throws Exception {
+
+
         // convert extents from EPSG:4326 into target SRS
         CRSAuthorityFactory factory = CRS.getAuthorityFactory(true);
         CoordinateReferenceSystem sourceCRS = factory.createCoordinateReferenceSystem(srs);
@@ -1727,7 +1811,6 @@ public class WMSController extends AbstractSecureController{
 
         if (height * width > MAX_IMAGE_PIXEL_COUNT) {
             String errorMessage = "Image size in pixels " + width + "x" + height + " exceeds " + MAX_IMAGE_PIXEL_COUNT + " pixels.  Make the image smaller";
-            response.sendError(response.SC_NOT_ACCEPTABLE, errorMessage);
             throw new Exception(errorMessage);
         }
 
@@ -1800,38 +1883,37 @@ public class WMSController extends AbstractSecureController{
         combined.drawImage(speciesImage, null, 0, 0);
         combined.dispose();
 
-        //if filename supplied, force a download
-        if (fileName != null) {
-            response.setContentType("application/octet-stream");
-            response.setHeader("Content-Description", "File Transfer");
-            response.setHeader("Content-Disposition", "attachment; filename=" + fileName);
-            response.setHeader("Content-Transfer-Encoding", "binary");
-        } else if (format.equalsIgnoreCase("png")) {
-            response.setContentType("image/png");
-        } else {
-            response.setContentType("image/jpeg");
-        }
-        response.setHeader("Cache-Control", wmsCacheControlHeaderPublicOrPrivate + ", max-age=" + wmsCacheControlHeaderMaxAge);
-        response.setHeader("ETag", wmsETag.get());
+       return img;
 
-        try {
-            if (format.equalsIgnoreCase("png")) {
-                OutputStream os = response.getOutputStream();
-                ImageIO.write(img, format, os);
-                os.close();
-            } else {
-                //handle jpeg + BufferedImage.TYPE_INT_ARGB
-                BufferedImage img2;
-                Graphics2D c2;
-                (c2 = (Graphics2D) (img2 = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)).getGraphics()).drawImage(img, 0, 0, Color.WHITE, null);
-                c2.dispose();
-                OutputStream os = response.getOutputStream();
-                ImageIO.write(img2, format, os);
-                os.close();
-            }
-        } catch (Exception e) {
-            logger.error(e.getMessage(), e);
+    }
+
+    public int[] getExtentsWidthHeight(String bboxString,
+                                       String srs,
+                                        String extents,
+                                       Double widthMm,
+                                       Integer dpi) throws Exception {
+        // convert extents from EPSG:4326 into target SRS
+        CRSAuthorityFactory factory = CRS.getAuthorityFactory(true);
+        CoordinateReferenceSystem sourceCRS = factory.createCoordinateReferenceSystem(srs);
+        CoordinateReferenceSystem targetCRS = factory.createCoordinateReferenceSystem("EPSG:4326");
+        CoordinateOperation transformTo4326 = new DefaultCoordinateOperationFactory().createOperation(sourceCRS, targetCRS);
+        CoordinateOperation transformFrom4326 = new DefaultCoordinateOperationFactory().createOperation(targetCRS, sourceCRS);
+        double[] bbox4326 = new double[4];     // extents in EPSG:4326
+        double[] bboxSRS = new double[4];      //extents in target SRS
+        if (bboxString != null) {
+            transformBBox(transformTo4326, bboxString, bboxSRS, bbox4326);
+        } else {
+            transformBBox(transformFrom4326, extents, bbox4326, bboxSRS);
+            bboxString = bboxSRS[0] + "," + bboxSRS[1] + "," + bboxSRS[2] + "," + bboxSRS[3];
         }
+
+        int[] heightWidth = new int[2];
+        heightWidth[1] = (int) ((dpi / 25.4) * widthMm);
+        heightWidth[0] = (int) Math.round(heightWidth[1] * ((bboxSRS[3] - bboxSRS[1]) / (bboxSRS[2] - bboxSRS[0])));
+
+        return heightWidth;
+
+
     }
 
     private BufferedImage basemapGoogle(int width, int height, double [] extents, String maptype) throws Exception {

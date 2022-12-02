@@ -64,8 +64,10 @@ public class DownloadRequestParams extends SpatialSearchRequestParams {
     @LogType(type="source")
     protected Integer sourceTypeId = null;
     //The file type for the download file."shp" or "csv"
-    @Pattern(regexp="(csv|shp|tsv)")
+    @Pattern(regexp="(csv|shp|tsv|map)")
     protected String fileType="csv";
+    /** for fileType=map downloads, URL parameters for webportal/wms/image */
+    protected String mapLayoutParams = "";
 
     /** URL to layersService to include intersections with layers that are not indexed */
     protected String layersServiceUrl = "";
@@ -403,5 +405,13 @@ public class DownloadRequestParams extends SpatialSearchRequestParams {
 
     public void setDoiDisplayTemplate(String doiDisplayTemplate) {
         this.doiDisplayTemplate = doiDisplayTemplate;
+    }
+
+    public String getMapLayoutParams() {
+        return mapLayoutParams;
+    }
+
+    public void setMapLayoutParams(String mapLayoutParams) {
+        this.mapLayoutParams = mapLayoutParams;
     }
 }

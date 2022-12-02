@@ -36,13 +36,13 @@
         <!--<appender-ref ref="ALA_LOGGER" />-->
     <!--</appender>-->
     <category name="org.ala.biocache">
-        <priority value="DEBUG"/>
+        <priority value="INFO"/>
     </category>
     <category name="au.org.ala.biocache">
-        <priority value="DEBUG"/>
+        <priority value="INFO"/>
     </category>
     <category name="au.org.ala">
-        <priority value="DEBUG"/>
+        <priority value="INFO"/>
     </category>
     <category name="org.scale7">
         <priority value="ERROR"/>

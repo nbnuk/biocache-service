@@ -124,6 +124,50 @@ public class OccurrenceIndex {
     @Field("*_i") Map<String, Object> miscIntProperties;
     @Field("*_d") Map<String, Object> miscDoubleProperties;
     @Field("*_dt") Map<String, Object> miscDateProperties;
+    //START - NBN Added
+    @Field("vitality") String vitality;
+    @Field("life_stage") String[] lifeStage; // now Oct-19 multivalued
+    @Field("location_id") String locationId;
+    @Field("raw_taxon_id") String raw_taxonId;
+    @Field("raw_sampling_protocol") String raw_samplingProtocol;
+
+    public String getVitality() {
+        return vitality;
+    }
+
+    public void setVitality(String vitality) {
+        this.vitality = vitality;
+    }
+
+    public String[] getLifeStage() { return lifeStage; } //multivalued
+
+    public void setLifeStage(String[] lifeStage) { this.lifeStage = lifeStage; }
+
+    public String getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(String locationId) {
+        this.locationId = locationId;
+    }
+
+    public String getRaw_taxonId() {
+        return raw_taxonId;
+    }
+
+    public void setRaw_taxonId(String raw_taxonId) {
+        this.raw_taxonId = raw_taxonId;
+    }
+
+    public String getRaw_samplingProtocol() {
+        return raw_samplingProtocol;
+    }
+
+    public void setRaw_samplingProtocol(String raw_samplingProtocol) {
+        this.raw_samplingProtocol = raw_samplingProtocol;
+    }
+    //END - NBN Added
+
     List<Map<String, Object>> imageMetadata;
 
     String imageUrl;
