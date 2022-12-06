@@ -751,29 +751,43 @@ public class WMSOSGridController {
 
         try {
 
-            CRSAuthorityFactory factory = CRS.getAuthorityFactory(true);
-            CoordinateReferenceSystem sourceCRS = factory.createCoordinateReferenceSystem(sourceCRSString);
-            CoordinateReferenceSystem targetCRS = factory.createCoordinateReferenceSystem(targetCRSString);
-            CoordinateOperation transformOp = new DefaultCoordinateOperationFactory().createOperation(sourceCRS, targetCRS);
-            GeneralDirectPosition directPosition = new GeneralDirectPosition(x, y);
-            DirectPosition latLongInTargetCRS = transformOp.getMathTransform().transform(directPosition, null);
 
-            //NOTE - returned coordinates are longitude, latitude, despite the fact that if
-            //converting latitude and longitude values, they must be supplied as latitude, longitude.
-            //No idea why this is the case.
-            Double longitude = latLongInTargetCRS.getOrdinate(0);
-            Double latitude = latLongInTargetCRS.getOrdinate(1);
+            if (targetCRSString.equals("EPSG:4326")){
+                //this change for "EPSG:4326" is necessary to make it compatable with the upgraded WMSController. Geotools caches a CRS once its been created
+                //for an authority code e.g. for "EPSG:4326", and in the upgrade, the CRS.decode in the legacy branch below was returning a previously cached CRS
+                //which resulted in long and lat between the wrong way round.
+                //See https://docs.geotools.org/latest/javadocs/org/geotools/referencing/CRS.html
+                CRSAuthorityFactory factory = CRS.getAuthorityFactory(true);
+                CoordinateReferenceSystem sourceCRS = factory.createCoordinateReferenceSystem(sourceCRSString);
+                CoordinateReferenceSystem targetCRS = factory.createCoordinateReferenceSystem(targetCRSString);
+                CoordinateOperation transformOp = new DefaultCoordinateOperationFactory().createOperation(sourceCRS, targetCRS);
+                GeneralDirectPosition directPosition = new GeneralDirectPosition(x, y);
+                DirectPosition latLongInTargetCRS = transformOp.getMathTransform().transform(directPosition, null);
+                Double longitude = latLongInTargetCRS.getOrdinate(0);
+                Double latitude = latLongInTargetCRS.getOrdinate(1);
+                double[] coords = new double[2];
+                coords[0] = latitude;
+                coords[1] = longitude;
+                return coords;
+            }
+            else{
+                //Keeo legacy code for all other authority code's (which are only for OSGrid)
+                CoordinateReferenceSystem sourceCRS = CRS.decode(sourceCRSString);
+                CoordinateReferenceSystem targetCRS = CRS.decode(targetCRSString);
+                CoordinateOperation transformOp = new DefaultCoordinateOperationFactory().createOperation(sourceCRS, targetCRS);
+                GeneralDirectPosition directPosition = new GeneralDirectPosition(x, y);
+                DirectPosition latLongInTargetCRS = transformOp.getMathTransform().transform(directPosition, null);
+                //NOTE (Reuben) - returned coordinates are longitude, latitude, despite the fact that if
+                //converting latitude and longitude values, they must be supplied as latitude, longitude.
+                //No idea why this is the case.
+                Double longitude = latLongInTargetCRS.getOrdinate(0);
+                Double latitude = latLongInTargetCRS.getOrdinate(1);
 
-            double[] coords = new double[2];
-
-//            coords[0] = Precision.round(longitude, 10);
-//            coords[1] = Precision.round(latitude, 10);
-
-            coords[0] = longitude;
-            coords[1] = latitude;
-
-
-            return coords;
+                double[] coords = new double[2];
+                coords[0] = longitude; //if its not "EPSG:4326", then its not actually longitude, its a coord in metres
+                coords[1] = latitude;
+                return coords;
+            }
 
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
