@@ -18,6 +18,7 @@ import au.org.ala.biocache.Config;
 import au.org.ala.biocache.config.AppConfig;
 import au.org.ala.biocache.dao.PersistentQueueDAO;
 import au.org.ala.biocache.dao.SearchDAO;
+import au.org.ala.biocache.dto.SearchResultDTO;
 import au.org.ala.biocache.dto.DownloadDetailsDTO;
 import au.org.ala.biocache.dto.DownloadRequestParams;
 import au.org.ala.biocache.dto.IndexFieldDTO;
@@ -90,6 +91,9 @@ public class DownloadController extends AbstractSecureController {
     @Inject
     protected AppConfig appConfig;
 
+    @Value("${commercialLicenceId:18}")
+    private int commercialLicenceId;
+
     /**
      * Retrieves all the downloads that are on the queue
      * @return
@@ -140,6 +144,11 @@ public class DownloadController extends AbstractSecureController {
             HttpServletResponse response,
             HttpServletRequest request) throws Exception {
 
+        if (!isLicencedRecordsDownloadAllowed(requestParams) && hasCCBYNC(requestParams)) {
+            response.sendError(HttpServletResponse.SC_PRECONDITION_FAILED, "Unable to perform an offline download as contains licenced records.");
+            return false;
+        }
+
         DownloadDetailsDTO.DownloadType downloadType = "index".equals(type.toLowerCase()) ? DownloadDetailsDTO.DownloadType.RECORDS_INDEX : DownloadDetailsDTO.DownloadType.RECORDS_DB;
 
         return download(requestParams, ip, apiKey, response, request, downloadType);
@@ -163,8 +172,14 @@ public class DownloadController extends AbstractSecureController {
             HttpServletResponse response,
             HttpServletRequest request) throws Exception {
 
+        if (!isLicencedRecordsDownloadAllowed(requestParams) && hasCCBYNC(requestParams)) {
+            response.sendError(HttpServletResponse.SC_PRECONDITION_FAILED, "Unable to perform an offline download as contains licenced records.");
+            return false;
+        }
+
         if (StringUtils.isEmpty(requestParams.getEmail())) {
             response.sendError(400, "Required parameter 'email' is not present");
+            return false;
         }
 
         //download from index only when there are no CASSANDRA fields requested and not everything is in SOLR
@@ -476,4 +491,36 @@ public class DownloadController extends AbstractSecureController {
             return downloadService.getSensitiveFq(xAlaUserIdHeader);
         }
     }
+
+    //NBN START
+    private boolean hasCCBYNC(SearchResultDTO searchResultDTO){
+
+        return searchResultDTO.getFacetResults().stream()
+                .anyMatch(doc -> {
+                    return doc.getFieldResult().stream().anyMatch(doc2 -> doc2.getLabel().equals("CC-BY-NC"));
+                });
+    }
+
+    private boolean hasCCBYNC(DownloadRequestParams requestParams){
+        Integer originalPageSize = requestParams.getPageSize();
+        boolean originalFacet = requestParams.getFacet();
+        String[] originalFacets = requestParams.getFacets();
+
+        requestParams.setPageSize(0);
+        requestParams.setFacet(true);
+        requestParams.setFacets(new String[]{"license"});
+
+        SearchResultDTO searchResultDTO = searchDAO.findByFulltextSpatialQuery(requestParams, null);
+
+        requestParams.setPageSize(originalPageSize);
+        requestParams.setFacet(originalFacet);
+        requestParams.setFacets(originalFacets);
+
+        return hasCCBYNC(searchResultDTO);
+    }
+
+    private boolean isLicencedRecordsDownloadAllowed(DownloadRequestParams requestParams) {
+        return !(requestParams.getReasonTypeId()==commercialLicenceId);
+    }
+    //NBN END
 }
