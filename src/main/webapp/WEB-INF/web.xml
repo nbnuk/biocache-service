@@ -126,5 +126,6 @@
         <url-pattern>/config/*</url-pattern>
         <url-pattern>/images/*</url-pattern>
         <url-pattern>/chart.json</url-pattern>
+        <url-pattern>/osgrid/lookup.json</url-pattern>
     </filter-mapping>
 </web-app>
