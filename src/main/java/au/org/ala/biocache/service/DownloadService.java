@@ -1463,6 +1463,9 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
      * @return A String with a Solr filter
      */
     public String getSensitiveFq(String userId) {
+        //TODO hmj
+       if (true) return "";
+        //if (true) return "(year:\"2011\")";
 
         if (downloadAuthSensitive == null || !downloadAuthSensitive) {
             return null;
