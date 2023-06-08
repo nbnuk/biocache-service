@@ -4905,6 +4905,17 @@ public class SearchDAOImpl implements SearchDAO {
 
     protected NbnUserWhitelist getWhitelistedDetails (DownloadDetailsDTO dd, DownloadRequestParams downloadParams) {
         NbnUserWhitelist nbnUserWhitelist = new NbnUserWhitelist();
+
+        //START DISABLE WHITELISTING
+        //whitelisting is to be replaced by AccessControls. This code has been added to disable whitelisting
+        if (true) {
+            nbnUserWhitelist.whitelistFq = "";
+            nbnUserWhitelist.whitelistDataResTaxa = new HashMap();
+            nbnUserWhitelist.hasWhitelistedSensitiveRecords = false;
+            return nbnUserWhitelist;
+        }
+        //END DISABLE WHITELISTING
+
         String whitelistFq = "";
         Map<String,ArrayList> whitelistDataResTaxa = new HashMap();
         Boolean hasWhitelistedSensitiveRecords = false;
