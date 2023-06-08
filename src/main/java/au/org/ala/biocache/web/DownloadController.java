@@ -239,12 +239,13 @@ public class DownloadController extends AbstractSecureController {
             }
         }
 
-        boolean includeSensitive = false;
-        if (apiKey != null) {
-            if (shouldPerformOperation(apiKey, response, false)) {
-                includeSensitive = true;
-            }
-        }
+//        boolean includeSensitive = false;
+
+//        if (apiKey != null) {
+//            if (shouldPerformOperation(apiKey, response, false)) {
+//                includeSensitive = true;
+//            }
+//        }
 
         // Pre SDS roles the sensitive flag controlled access to sensitive data.
         // After SDS roles were introduced, sensitiveFq variable drives the logic for sensitive data down the excution flow.
@@ -252,17 +253,18 @@ public class DownloadController extends AbstractSecureController {
         // In Summary either sensitive is true or sensitiveFq is not null but not both
 
         //get the fq that includes only the sensitive data that the userId ROLES permits
-        String sensitiveFq = null;
-        if (!includeSensitive) {
-            sensitiveFq = getSensitiveFq(request);
-        }
+//        String sensitiveFq = null;
+//        if (!includeSensitive) {
+//            sensitiveFq = getSensitiveFq(request);
+//        }
 
         ip = ip == null ? request.getRemoteAddr() : ip;
 
         //create a new task
         DownloadDetailsDTO dd = new DownloadDetailsDTO(requestParams, ip, userAgent, downloadType);
-        dd.setIncludeSensitive(includeSensitive);
-        dd.setSensitiveFq(sensitiveFq);
+//        dd.setIncludeSensitive(includeSensitive);
+//        dd.setSensitiveFq(sensitiveFq);
+        dd = applyNbnAccessControlsToDownload(dd, request);
 
         //get query (max) count for queue priority
         requestParams.setPageSize(0);
@@ -518,4 +520,33 @@ public class DownloadController extends AbstractSecureController {
             return downloadService.getSensitiveFq(xAlaUserIdHeader);
         }
     }
+
+    private DownloadDetailsDTO applyNbnAccessControlsToDownload(DownloadDetailsDTO dd, HttpServletRequest request){
+        //check authorisation.
+        if (!isValidKey(request.getHeader("apiKey"))) {
+            return dd;
+        }
+
+        String xAlaUserIdHeader = request.getHeader("X-ALA-userId");
+        if (xAlaUserIdHeader == null) {
+            return dd;
+        }
+
+        Map<String, Object> userDetails = (Map<String, Object>) authService.getUserDetails(xAlaUserIdHeader);
+        if (userDetails == null) {
+            return dd;
+        }
+
+        String sensitiveFq = downloadService.getSensitiveFq(xAlaUserIdHeader);
+
+        if (sensitiveFq != null) {
+            dd.setEmail((String) userDetails.get("email"));
+            dd.setSensitiveFq(sensitiveFq);
+        }
+
+        return dd;
+
+    }
+
+
 }
