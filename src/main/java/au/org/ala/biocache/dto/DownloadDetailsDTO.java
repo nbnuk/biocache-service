@@ -274,7 +274,7 @@ public class DownloadDetailsDTO {
      */
     public String getSensitiveFq() {
         //only download from the index is supported for AccessControls
-        return downloadType.equals(DownloadType.RECORDS_INDEX)?sensitiveFq:"";
+        return downloadType.equals(DownloadType.RECORDS_INDEX)?sensitiveFq:null;
     }
 
     public void setInterrupt(AtomicBoolean interrupt) {
