@@ -273,8 +273,7 @@ public class DownloadDetailsDTO {
      * @return A non-null string if the user is allowed to view sensitive fields, and null otherwise.
      */
     public String getSensitiveFq() {
-        //only download from the index is supported for AccessControls
-        return downloadType.equals(DownloadType.RECORDS_INDEX)?sensitiveFq:null;
+        return sensitiveFq;
     }
 
     public void setInterrupt(AtomicBoolean interrupt) {

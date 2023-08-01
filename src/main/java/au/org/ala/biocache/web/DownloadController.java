@@ -79,6 +79,10 @@ public class DownloadController extends AbstractSecureController {
     @Value("${download.auth.role:ROLE_USER}")
     String downloadRole;
 
+    @Value("${accesscontrol.feature.enabled:false}")
+    boolean accessControlFeatureEnabled;//can be removed when whitelisting is removed
+
+
     /**
      * Retrieves all the downloads that are on the queue
      * @return
@@ -522,6 +526,14 @@ public class DownloadController extends AbstractSecureController {
     }
 
     private DownloadDetailsDTO applyNbnAccessControlsToDownload(DownloadDetailsDTO dd, HttpServletRequest request){
+        if (!accessControlFeatureEnabled) {
+            return dd;
+        }
+
+        if (!dd.getDownloadType().equals(DownloadDetailsDTO.DownloadType.RECORDS_INDEX)){
+            return dd;
+        }
+
         //check authorisation.
         if (!isValidKey(request.getHeader("apiKey"))) {
             return dd;

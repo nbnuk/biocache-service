@@ -193,6 +193,9 @@ public class SearchDAOImpl implements SearchDAO {
     @Value("${download.whitelisted.licenseAnnotation:}")
     protected String whitelistedLicenseAnnotation;
 
+    @Value("${accesscontrol.feature.enabled:false}")
+    protected boolean accessControlFeatureEnabled;//can be removed when whitelisting is removed
+
     @Inject
     private RestOperations restTemplate;
     //END - NBN FIELDS
@@ -4908,7 +4911,7 @@ public class SearchDAOImpl implements SearchDAO {
 
         //START DISABLE WHITELISTING
         //whitelisting is to be replaced by AccessControls. This code has been added to disable whitelisting
-        if (true) {
+        if (accessControlFeatureEnabled) {
             nbnUserWhitelist.whitelistFq = "";
             nbnUserWhitelist.whitelistDataResTaxa = new HashMap();
             nbnUserWhitelist.hasWhitelistedSensitiveRecords = false;
