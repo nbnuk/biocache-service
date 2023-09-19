@@ -8,6 +8,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import au.org.ala.biocache.dao.PersistentQueueDAO;
@@ -34,6 +35,8 @@ public class DownloadControlThread implements Runnable {
     private final DownloadCreator downloadCreator;
     private final PersistentQueueDAO persistentQueueDAO;
     private final ExecutorService parallelQueryExecutor;
+
+    private final ObjectMapper jsonMapper = new ObjectMapper();
     
     public DownloadControlThread(String name,
                                 Integer maxRecords,
@@ -90,6 +93,11 @@ public class DownloadControlThread implements Runnable {
                 }
                 currentDownload = persistentQueueDAO.getNextDownload(maxRecords, downloadType);
                 if (currentDownload != null) {
+                   try{
+                       System.out.println("DEBUG_DOWNLOAD DownloadControlThread submitting download:"+jsonMapper.writeValueAsString(currentDownload));
+                   }catch (Exception e){
+                       System.out.println("DEBUG_DOWNLOAD DownloadControlThread submitting download:"+currentDownload.getUniqueId());
+                   }
                     // The submitted download will return the capacity when it finishes
                     currentDownload.setProcessingThreadName(this.name);
                     downloadServiceExecutor.submitDownload(currentDownload, parallelQueryExecutor);
@@ -100,7 +108,13 @@ public class DownloadControlThread implements Runnable {
             }
         } catch (InterruptedException | RejectedExecutionException e) {
             Thread.currentThread().interrupt();
-        } finally {
+        } catch(Throwable t){
+            System.out.println("DEBUG_DOWNLOAD DownloadControlThread caught exception");
+            t.printStackTrace();
+        }
+
+        finally {
+            System.out.println("DEBUG_DOWNLOAD DownloadControlThread shutting down (in finally)");
             try {
                 downloadServiceExecutor.shutdown();
                 downloadServiceExecutor.awaitTermination(3, TimeUnit.SECONDS);

@@ -261,7 +261,7 @@ public class JsonPersistentQueueDAOImpl implements PersistentQueueDAO {
      * @see au.org.ala.biocache.dao.PersistentQueueDAO#refreshFromPersistent()
      */
     @Override
-    public void refreshFromPersistent() {
+    public void refreshFromPersistent() {logger.info("DEBUG_DOWNLOAD refreshFromPersistent (/data/cache/downloads");
         if (!closed.get()) {
             synchronized (listLock) {
                 offlineDownloadList.clear();
@@ -281,6 +281,9 @@ public class JsonPersistentQueueDAOImpl implements PersistentQueueDAO {
                         if (f.isFile()) {
                             try {
                                 DownloadDetailsDTO dd = jsonMapper.readValue(f, DownloadDetailsDTO.class);
+                                logger.info("DEBUG_DOWNLOAD Adding to queue (from the cache):");
+                                logger.info(jsonMapper.writeValueAsString(dd));
+                                logger.info("");
                                 // Ensure that previously partially downloaded files get their downloads 
                                 // reattempted by making them available for download again and removing 
                                 // any partial files that already exist for it
