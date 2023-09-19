@@ -67,6 +67,10 @@
                 <version>2.6.1-NBN-0-1-0-SNAPSHOT</version>
             <exclusions>
                 <exclusion>
+                    <groupId>au.org.ala</groupId>
+                    <artifactId>biocache-store</artifactId>
+                </exclusion>
+                <exclusion>
                     <artifactId>org.springframework</artifactId>
                     <groupId>spring-orm</groupId>
                 </exclusion>
