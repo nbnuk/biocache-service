@@ -147,6 +147,10 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
     @Inject
     protected DataQualityService dataQualityService;
 
+    @Inject
+    protected WMSController wmsController;
+
+
     // when everything is indexed in SOLR, there will be no cassandra download unless requested
     @Value("${download.solr.only:false}")
     public Boolean downloadSolrOnly = Boolean.FALSE;
@@ -1410,37 +1414,17 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
 
         BufferedImage img = null;
         try {
-            img = wmsController.generatePublicationMapImage(
-                    spatialParams,
-                    format,
-                    extents,
-                    bboxString,
-                    widthmm,
-                    pradiusmm,
-                    pradiuspx,
-                    pcolour,
-                    env,
-                    srs,
-                    popacity,
-                    baselayer,
-                    scale,
-                    dpi,
-                    baselayerStyle,
-                    Boolean.parseBoolean(outline),
-                    outlineColour,
-                    fileName,
-                    baseMap
-            );
+            img = wmsController.generatePublicationMapImage(spatialParams, extents, bboxString, widthmm,pradiusmm,pradiuspx,pcolour,env,srs,popacity,baselayer,scale,dpi,baselayerStyle,Boolean.parseBoolean(outline),outlineColour,baseMap);
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
             return false;
         }
-        try {
-            //save img to file
-            int[] heightWidth = wmsController.getExtentsWidthHeight(bboxString,srs,extents, widthmm, dpi);
-            File fileMap = new File(biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + fileName);
+         try {
+             //save img to file
+             int[] heightWidth = wmsController.getExtentsWidthHeight(bboxString, srs, extents, widthmm, dpi);
+             File fileMap = new File(biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + fileName);
 
-            if (format.equalsIgnoreCase("png")) {
+             if (format.equalsIgnoreCase("png")) {
                 ImageIO.write(img, format, fileMap);
             } else {
                 //handle jpeg + BufferedImage.TYPE_INT_ARGB
