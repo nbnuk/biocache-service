@@ -1713,8 +1713,7 @@ public class WMSController extends AbstractSecureController{
 
         BufferedImage img = generatePublicationMapImage(
                  requestParams,
-                 format,
-                 extents,
+                  extents,
                  bboxString,
                  widthMm,
                  pointRadiusMm,
@@ -1729,7 +1728,6 @@ public class WMSController extends AbstractSecureController{
                  baselayerStyle,
          outlinePoints,
          outlineColour,
-         fileName,
          baseMap
             );
 
@@ -1770,7 +1768,6 @@ public class WMSController extends AbstractSecureController{
 
     public BufferedImage generatePublicationMapImage(
             SpatialSearchRequestParams requestParams,
-            String format,
             String extents,
             String bboxString,
             Double widthMm,
@@ -1786,7 +1783,6 @@ public class WMSController extends AbstractSecureController{
             String baselayerStyle,
             boolean outlinePoints,
             String outlineColour,
-            String fileName,
             String baseMap
             ) throws Exception {
 
