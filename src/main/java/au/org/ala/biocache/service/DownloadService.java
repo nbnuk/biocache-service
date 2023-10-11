@@ -1379,7 +1379,6 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
         Map<String, String> mappedParams = listParams.stream().collect(
                 Collectors.toMap(NameValuePair::getName, NameValuePair::getValue));
 
-        WMSController wmsController = new WMSController();
         SpatialSearchRequestParams spatialParams = new SpatialSearchRequestParams();
         if (mappedParams.containsKey("wkt")) spatialParams.setWkt(mappedParams.get("wkt"));
         if (mappedParams.containsKey("lat")) spatialParams.setLat(Float.parseFloat(mappedParams.get("lat")));
