@@ -1392,7 +1392,7 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
         Integer pradiuspx = (mappedParams.get("pradiuspx") == null? null : Integer.parseInt(mappedParams.get("pradiuspx")));
         String pcolour = (mappedParams.get("pcolour") == null? "FF0000" : mappedParams.get("pcolour"));
         String env = (mappedParams.get("env") == null? "" : mappedParams.get("env"));
-        String srs = (mappedParams.get("srs") == null? "EPSG:900913" : mappedParams.get("srs"));
+        String srs = (mappedParams.get("srs") == null? "EPSG:3857" : mappedParams.get("srs"));
         Double popacity = (mappedParams.get("popacity") == null? 0.8 : Double.parseDouble(mappedParams.get("popacity")));
         String baselayer = (mappedParams.get("baselayer") == null? "world" : mappedParams.get("baselayer"));
         String scale = (mappedParams.get("scale") == null? " off" : mappedParams.get("scale"));
