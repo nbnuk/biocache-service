@@ -284,7 +284,7 @@ public class WMSOSGridController {
             SpatialSearchRequestParams requestParams,
             @RequestParam(value = "CQL_FILTER", required = false, defaultValue = "") String cql_filter,
             @RequestParam(value = "ENV", required = true, defaultValue = "") String env,
-            @RequestParam(value = "SRS", required = false, defaultValue = "EPSG:900913") String srs, //default to google mercator
+            @RequestParam(value = "SRS", required = false, defaultValue = "EPSG:3857") String srs, //default to google mercator
             @RequestParam(value = "STYLES", required = false, defaultValue = "") String styles,
             @RequestParam(value = "BBOX", required = true, defaultValue = "") String bboxString,
             @RequestParam(value = "LAYERS", required = false, defaultValue = "") String layers,
