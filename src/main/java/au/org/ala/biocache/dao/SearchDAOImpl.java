@@ -4529,16 +4529,6 @@ public class SearchDAOImpl implements SearchDAO {
                 colours.add(li);
             }
         } else {
-            SpatialSearchRequestParams requestParams = new SpatialSearchRequestParams();
-            requestParams.setFormattedQuery(request.getFormattedQuery());
-            requestParams.setWkt(request.getWkt());
-            requestParams.setRadius(request.getRadius());
-            requestParams.setLat(request.getLat());
-            requestParams.setLon(request.getLon());
-            requestParams.setQ(request.getQ());
-            requestParams.setQc(request.getQc());
-            requestParams.setFq(qidCacheDao.getFq(request));
-            requestParams.setFoffset(-1);
 
             //test for cutpoints on the back of colourMode
             String[] s = colourMode.split(",");
@@ -4550,7 +4540,7 @@ public class SearchDAOImpl implements SearchDAO {
             if (s[0].equals("-1") || s[0].equals("grid")) {
                 return null;
             } else {
-                List<LegendItem> legend = getLegend(requestParams, s[0], cutpoints, true);
+                List<LegendItem> legend = getLegend(request, s[0], cutpoints, true);
 
                 if (cutpoints == null) {     //do not sort if cutpoints are provided
                     java.util.Collections.sort(legend);
