@@ -1764,6 +1764,11 @@ public class SearchDAOImpl implements SearchDAO {
 
                 values = maskSensitiveFieldsForNonWhitelistedTaxa(fields, values, drUid_index, lsid_index, nbnUserWhitelist);
 
+                if (!includeSensitive && dd.getSensitiveFq() != null) {
+                    values = nbnAddAccessConrtolledCoumn(fields, values); //TODO
+
+                }
+
                 rw.write(values);
 
                 //increment the counters....
@@ -1904,6 +1909,12 @@ public class SearchDAOImpl implements SearchDAO {
             String[] header = org.apache.commons.lang3.ArrayUtils.addAll(titles, analysisHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, speciesListHeaders);
             header = org.apache.commons.lang3.ArrayUtils.addAll(header, qaTitles);
+
+            //NBN
+            if (!includeSensitive && dd.getSensitiveFq() != null) {
+                header = org.apache.commons.lang3.ArrayUtils.add(header, "access_controlled");
+            }
+            //END NBN
 
             //Create the Writer that will be used to format the records
             //construct correct RecordWriter based on the supplied fileType
@@ -4830,6 +4841,18 @@ public class SearchDAOImpl implements SearchDAO {
     }
 
     /** -----------------------NBN ADDED------------------ **/
+
+    private String[] nbnAddAccessConrtolledCoumn(String[] fields, String[] values){
+        String puplicResolutionInMeters;
+        for (int i = 0; i < fields.length; i++) {
+            if (fields[i].startsWith("public_resolution_in_meters")) {
+                if (values[i] != null && !values[i].isEmpty()) {
+                    puplicResolutionInMeters = values[i];
+                }
+            }
+        }
+    }
+
 
     private String[] maskSensitiveFieldsForNonWhitelistedTaxa(String[] fields, String[] values, Integer drUid_index, Integer lsid_index, NbnUserWhitelist nbnUserWhitelist) {
         //check if whitelisted: if not, then may need to remove values
