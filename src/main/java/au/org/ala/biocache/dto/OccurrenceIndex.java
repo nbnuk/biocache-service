@@ -130,6 +130,16 @@ public class OccurrenceIndex {
     @Field("location_id") String locationId;
     @Field("raw_taxon_id") String raw_taxonId;
     @Field("raw_sampling_protocol") String raw_samplingProtocol;
+    @Field("public_resolution_in_meters") Integer publicResolutionInMeters;
+
+    public Integer getPublicResolutionInMeters() {
+        return publicResolutionInMeters;
+    }
+
+    public void setPublicResolutionInMeters(Integer publicResolutionInMeters) {
+        this.publicResolutionInMeters = publicResolutionInMeters;
+    }
+
 
     public String getVitality() {
         return vitality;
