@@ -13,6 +13,7 @@ branches:
     - /^hotfix\/.*$/
     - /^feature\/.*$/
     - master-nbn.3.4.0
+    - get-travis-working
 before_cache:
   - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
   - rm -fr $HOME/.gradle/caches/*/plugin-resolution/
@@ -28,7 +29,7 @@ before_install:
 after_success:
   - '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && ./gradlew clean'
   - ./gradlew publish
-  - ./gradlew coveralls
+#  - ./gradlew coveralls
 #after_success:
 #  - mvn coveralls:report
 env:
