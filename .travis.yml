@@ -24,6 +24,8 @@ cache:
     - $HOME/.m2
     - $HOME/.gradle/caches/
     - $HOME/.gradle/wrapper/
+install:
+  - ./gradlew assemble -x test
 before_install:
   - export TZ=Europe/London
 after_success:
