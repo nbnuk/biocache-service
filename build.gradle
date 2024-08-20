@@ -232,6 +232,7 @@ dockerCompose {
 }
 
 test {
+    exclude '**/*IT'
     finalizedBy 'jacocoTestReport' // report is always generated after tests run
 }
 
