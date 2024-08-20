@@ -24,13 +24,11 @@ cache:
     - $HOME/.m2
     - $HOME/.gradle/caches/
     - $HOME/.gradle/wrapper/
-install:
-  - ./gradlew assemble -x test
 before_install:
   - export TZ=Europe/London
 after_success:
-  - '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && ./gradlew clean -x test'
-  - ./gradlew publish -x test
+  - '[ "${TRAVIS_PULL_REQUEST}" = "false" ] && ./gradlew clean'
+  - ./gradlew publish
 #  - ./gradlew coveralls
 #after_success:
 #  - mvn coveralls:report
