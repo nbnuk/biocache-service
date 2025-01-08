@@ -851,7 +851,7 @@ public class WMSController extends AbstractSecureController{
 
         ObjectMapper om = new ObjectMapper();
         String guid = null;
-        JsonNode guidLookupNode = om.readTree(new URL(bieWebService + "/guid/" + URLEncoder.encode(taxonName, "UTF-8")));
+        JsonNode guidLookupNode = om.readTree(new URL(bieWebService + "/guid/" + URLEncoder.encode(taxonName, "UTF-8").replace("+","%20")));
         //NC: Fixed the ArraryOutOfBoundsException when the lookup fails to yield a result
         if (guidLookupNode.isArray() && guidLookupNode.size() > 0) {
             JsonNode idNode = guidLookupNode.get(0).get("acceptedIdentifier");//NC: changed to used the acceptedIdentifier because this will always hold the guid for the accepted taxon concept whether or not a synonym name is provided
@@ -862,7 +862,7 @@ public class WMSController extends AbstractSecureController{
 
             model.addAttribute("guid", guid);
             model.addAttribute("speciesPageUrl", bieUiUrl + "/species/" + guid);
-            JsonNode node = om.readTree(new URL(bieWebService + "/species/info/" + guid + ".json"));
+            JsonNode node = om.readTree(new URL(bieWebService + "/species/" + guid));
             JsonNode tc = node.get("taxonConcept");
             JsonNode imageNode = tc.get("smallImageUrl");
             String imageUrl = imageNode != null ? imageNode.asText() : null;
@@ -885,7 +885,7 @@ public class WMSController extends AbstractSecureController{
 
             JsonNode leftNode = tc.get("left");
             JsonNode rightNode = tc.get("right");
-            newQuery = leftNode != null && rightNode != null ? "lft:[" + leftNode.asText() + " TO " + rightNode.asText() + "]" : "taxonConceptID:" + guid;
+            newQuery = leftNode != null && rightNode != null ? "lft:[" + leftNode.asText() + " TO " + rightNode.asText() + "]" : "taxon_concept_lsid:" + guid;
             if (logger.isDebugEnabled()) {
                 logger.debug("The new query : " + newQuery);
             }
@@ -917,7 +917,7 @@ public class WMSController extends AbstractSecureController{
             JsonNode classificationNode = node2.get("classification");
             model.addAttribute("kingdom", StringUtils.capitalize(classificationNode.get("kingdom").asText().toLowerCase()));
             model.addAttribute("phylum", StringUtils.capitalize(classificationNode.get("phylum").asText().toLowerCase()));
-            model.addAttribute("clazz", StringUtils.capitalize(classificationNode.get("clazz").asText().toLowerCase()));
+            model.addAttribute("class", StringUtils.capitalize(classificationNode.get("class").asText().toLowerCase()));
             model.addAttribute("order", StringUtils.capitalize(classificationNode.get("order").asText().toLowerCase()));
             model.addAttribute("family", StringUtils.capitalize(classificationNode.get("family").asText().toLowerCase()));
             model.addAttribute("genus", classificationNode.get("genus").asText());
@@ -934,7 +934,9 @@ public class WMSController extends AbstractSecureController{
         searchParams.setPageSize(0);
         List<FacetResultDTO> facets = searchDAO.getFacetCounts(searchParams);
         model.addAttribute("query", newQuery); //need a facet on data providers
-        model.addAttribute("dataProviders", facets.get(0).getFieldResult()); //need a facet on data providers
+        if(facets.size() > 0) {
+            model.addAttribute("dataProviders", facets.get(0).getFieldResult()); //need a facet on data providers
+        }
         return "metadata/mcp";
     }
 
