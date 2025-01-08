@@ -170,7 +170,7 @@ public class TaxonDAOImpl implements TaxonDAO {
         query.setFacetSort("index");
         //query.setFacet
         if(filterQueries != null){
-            for(String fq: filterQueries) query.addFilterQuery(fq);
+            for(String fq: filterQueries) query.addFilterQuery(escapeForSolrQuery(fq));
         }
         QueryResponse response = solrClient.query(query);
         List<FacetField.Count> fc = response.getFacetField(facetName).getValues();
@@ -178,5 +178,14 @@ public class TaxonDAOImpl implements TaxonDAO {
             fc = new ArrayList<FacetField.Count>();
         }
         return fc;
+    }
+
+    private String escapeForSolrQuery(String input){
+        if(input == null){
+            return  null;
+        }
+
+        // if we want to do anything more complex, we should split into field and value first
+        return  input.replace("[", "\\[").replace("]", "\\]");
     }
 }
