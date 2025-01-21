@@ -1138,10 +1138,10 @@ public class WMSController extends AbstractSecureController{
             if (filterQueries != null && filterQueries.length > 0) {
                 StringBuilder fqBuilder = new StringBuilder();
                 for (int i = 0; i < filterQueries.length; i++) {
-                    if (i > 0) fqBuilder.append(",");
-                    fqBuilder.append(filterQueries[i]);
+                    if (i > 0) fqBuilder.append("&");
+                    fqBuilder.append("fq="+URLEncoder.encode(filterQueries[i], "UTF-8"));
                 }
-                encodedFilterQueries = URLEncoder.encode(fqBuilder.toString(), "UTF-8");
+                encodedFilterQueries = fqBuilder.toString();
             }
 
             if ("GetMap".equalsIgnoreCase(requestString)) {
