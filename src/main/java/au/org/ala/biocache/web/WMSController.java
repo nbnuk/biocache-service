@@ -1320,14 +1320,18 @@ public class WMSController extends AbstractSecureController{
             }
 
             query = searchUtils.convertRankAndName(query);
+
+            requestParams.setFq(filterQueries);
+            queryFormatUtils.formatSearchQuery(requestParams, true);
+
             if (logger.isDebugEnabled()) {
-                logger.debug("GetCapabilities query in use: " + query);
+                logger.debug("GetCapabilities query in use: " + requestParams.getFormattedQuery());
             }
 
             if (useSpeciesGroups) {
-                taxonDAO.extractBySpeciesGroups(baseWsUrl + "/ogc/getMetadata", query, filterQueries, writer);
+                taxonDAO.extractBySpeciesGroups(baseWsUrl + "/ogc/getMetadata", requestParams.getFormattedQuery(), requestParams.getFormattedFq(), writer);
             } else {
-                taxonDAO.extractHierarchy(baseWsUrl + "/ogc/getMetadata", query, filterQueries, writer);
+                taxonDAO.extractHierarchy(baseWsUrl + "/ogc/getMetadata", requestParams.getFormattedQuery(), requestParams.getFormattedFq(), writer);
             }
 
             writer.write("</Layer></Capability></WMT_MS_Capabilities>\n");
