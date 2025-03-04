@@ -1198,8 +1198,8 @@ public class WMSController extends AbstractSecureController{
 
             String supportedCodes = "      <SRS>EPSG:4326</SRS>\n";
             for (String code : CRS.getSupportedCodes("EPSG")) {
-                if (!"EPSG:4326".equals(code)) {
-                    supportedCodes += "      <SRS>" + code + "</SRS>\n";
+                if (!"4326".equals(code)) {
+                    supportedCodes += "      <SRS>EPSG:" + code + "</SRS>\n";
                 }
             }
 
