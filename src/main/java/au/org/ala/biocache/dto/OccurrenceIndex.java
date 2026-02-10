@@ -372,7 +372,7 @@ public class OccurrenceIndex {
     public static final String DECADE_FACET_NAME = "decade";
 
     public static final String spatialField = "geohash";
-    public static final String spatialFieldWMS = "quad";
+    public static String spatialFieldWMS; //NBN removed final as this is now set in NbnAppConfig
 
     //featureAssertions
 
