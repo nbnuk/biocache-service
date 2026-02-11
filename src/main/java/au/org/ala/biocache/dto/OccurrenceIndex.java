@@ -365,7 +365,7 @@ public class OccurrenceIndex {
             "sensitive_verbatimLocality",
             "sensitive_verbatimLongitude"};
     public static final String[] notSensitiveSOLRHdr = {LONGITUDE, LATITUDE, LOCALITY, EVENT_DATE, EVENT_DATE_END, GRID_REFERENCE, COORDINATE_UNCERTAINTY, DAY, EVENT_ID, FOOTPRINT_WKT};
-    public static final String CONTAINS_SENSITIVE_PATTERN = StringUtils.join(sensitiveSOLRHdr, "|");
+    public static final String CONTAINS_SENSITIVE_PATTERN = ".*(" + StringUtils.join(sensitiveSOLRHdr, "|") + ").*";
 
     public static final String NAMES_AND_LSID = "names_and_lsid";
     public static final String COMMON_NAME_AND_LSID = "common_name_and_lsid";

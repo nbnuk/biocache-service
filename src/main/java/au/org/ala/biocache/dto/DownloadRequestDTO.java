@@ -234,6 +234,14 @@ public class DownloadRequestDTO extends SpatialSearchRequestDTO {
         return fields;
     }
 
+    public void setFields(String fields, boolean permitSensitive) {
+        if (permitSensitive) {
+            this.fields = fields;
+        } else {
+            setFields(fields);
+        }
+    }
+
     /**
      * @param fields the fields to set
      */
