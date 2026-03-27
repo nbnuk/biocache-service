@@ -197,6 +197,10 @@ public class ProcessDownload implements ProcessInterface {
         // get all the fields requested of SOLR, excluding post-process fields.
         // post-process fields requested are headers.included[pos] where pos >= headers.labels.length
         for (int j = 0; j < headers.labels.length; j++) {
+            if (appendPossibleNbnValue(tuple, this.headers.included[j], values, j)) {
+                continue;
+            }
+
             Object obj = tuple.get(headers.included[j]);
 
             if (obj == null) {
@@ -351,4 +355,31 @@ public class ProcessDownload implements ProcessInterface {
 
         return values;
     }
+
+    //NBN methods
+    private boolean appendPossibleNbnValue(Tuple tuple, String key, String[] values, int index) {
+        //NOTE: if NBN_GENERALISED_STATUS is in the download, then you must also have PUBLIC_RESOLUTION_IN_METERS
+        //and SENSITIVE in the download.
+        if (!NBN_GENERALISED_STATUS.equals(key)) {
+            return false;
+        }
+        Long publicResolution = tuple.getLong(PUBLIC_RESOLUTION_IN_METERS);
+        String sensitive = tuple.getString(SENSITIVE);
+        Double sensitiveLatitude = tuple.getDouble("sensitive_" + LATITUDE);
+
+        String value;
+
+        if ((publicResolution == null || publicResolution == 0)
+                && (StringUtils.isEmpty(sensitive) || "null".equals(sensitive))) {
+            value = "There is no higher resolution location information available via the NBN Atlas.";
+        } else if (sensitiveLatitude == null) {
+            value = "Location information has been generalised. Please contact the data partner.";
+        } else {
+            value = "Access granted to highest resolution location information.";
+        }
+
+        values[index] = value;
+        return true;
+    }
+
 }

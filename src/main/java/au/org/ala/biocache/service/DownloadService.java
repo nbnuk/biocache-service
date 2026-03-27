@@ -1603,4 +1603,19 @@ public class DownloadService implements ApplicationListener<ContextClosedEvent> 
         }
         return true;
     }
+
+    @Inject
+    org.springframework.core.env.Environment env;
+
+    public Integer nbnGetDownloadLimit(AlaUserProfile alaUser) {
+        logger.debug("Checking download limit for user with userId:" + alaUser.getUserId()+" email:" + alaUser.getEmail());
+        for (String role : alaUser.getRoles()) {
+            if (role.startsWith("ROLE_DOWNLOAD_LIMIT_")) {
+                Integer downloadLimit = env.getProperty(role, Integer.class, dowloadOfflineMaxSize);
+                logger.debug("User has role " + role + " download limit (set in config) found to be " + downloadLimit);
+                return downloadLimit;
+            }
+        }
+        return dowloadOfflineMaxSize;
+    }
 }

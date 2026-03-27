@@ -253,7 +253,7 @@ public class DownloadController extends AbstractSecureController {
                 status.setStatus(DownloadStatusDTO.DownloadStatus.IN_QUEUE);
                 status.setStatusUrl(downloadService.webservicesRoot + "/occurrences/offline/status/" + dd.getUniqueId());
             }
-        } else if (dd.getTotalRecords() > downloadService.dowloadOfflineMaxSize) {
+        } else if (dd.getTotalRecords() > downloadService.nbnGetDownloadLimit(alaUser)) {
             //identify this download as too large
             File file = new File(downloadService.biocacheDownloadDir + File.separator + UUID.nameUUIDFromBytes(dd.getRequestParams().getEmail().getBytes(StandardCharsets.UTF_8)) + File.separator + dd.getStartTime() + File.separator + "tooLarge");
             FileUtils.forceMkdir(file.getParentFile());

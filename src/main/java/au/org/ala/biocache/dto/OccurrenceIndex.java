@@ -81,6 +81,9 @@ public class OccurrenceIndex {
     final public static String LOCALITY = "locality";
     final public static String BIOME = "biome";
 
+    final public static String PUBLIC_RESOLUTION_IN_METERS = "publicResolutionInMeters";
+    final public static String NBN_GENERALISED_STATUS= "generalisedStatus_nbnComputedField";
+
     @Field("id") @Schema(description="Atlas persistent UUID for this record")
     String uuid;
     @Field("occurrenceID") @Schema(description="http://rs.tdwg.org/dwc/terms/occurrenceID")
