@@ -367,12 +367,16 @@ public class ProcessDownload implements ProcessInterface {
         String sensitive = tuple.getString(SENSITIVE);
         Double sensitiveLatitude = tuple.getDouble("sensitive_" + LATITUDE);
 
+        String[] fullResolutionAccessIndicatorFields = {"sensitive_" + LATITUDE, "sensitive_" + LOCALITY, "sensitive_locationRemarks", "sensitive_verbatimLocality", "sensitive_" + COORDINATE_UNCERTAINTY};
+
         String value;
 
         if ((publicResolution == null || publicResolution == 0)
                 && (StringUtils.isEmpty(sensitive) || "null".equals(sensitive))) {
             value = "There is no higher resolution location information available via the NBN Atlas.";
-        } else if (sensitiveLatitude == null) {
+        } else if (Arrays.stream(fullResolutionAccessIndicatorFields)
+                .map(tuple::get)
+                .allMatch(Objects::isNull)) {
             value = "Location information has been generalised. Please contact the data partner.";
         } else {
             value = "Access granted to highest resolution location information.";
