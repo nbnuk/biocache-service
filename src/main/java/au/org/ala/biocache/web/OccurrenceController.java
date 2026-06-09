@@ -221,6 +221,9 @@ public class OccurrenceController extends AbstractSecureController {
     @Value("${page.depth.max:5000}")
     public Integer pageDepthMax;
 
+    @Value("${download.max:500000}")
+    private int synchronousDownloadLimit;
+
     private final AtomicReference<String> occurrenceETag = new AtomicReference<>(UUID.randomUUID().toString());
 
     private ExecutorService executor;
@@ -1384,6 +1387,10 @@ public class OccurrenceController extends AbstractSecureController {
             return;
         }
 
+        if(!nbnValidateSynchronousDownloadLimit(downloadParams, request, response)) {
+            return;
+        }
+
         try {
             ServletOutputStream out = response.getOutputStream();
             downloadService.writeQueryToStream(
@@ -1398,6 +1405,30 @@ public class OccurrenceController extends AbstractSecureController {
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
         }
+    }
+
+    private boolean nbnValidateSynchronousDownloadLimit(
+            DownloadRequestParams downloadParams,
+            HttpServletRequest request,
+            HttpServletResponse response) throws Exception {
+
+        // Accept the downloadParams and create a new downloadRequestDTO as there may be side-effects if we mutate the request used for the download
+        DownloadRequestDTO downloadRequestDTO = DownloadRequestDTO.create(downloadParams, request);
+        downloadRequestDTO.setPageSize(0);
+        downloadRequestDTO.setFacet(false);
+
+        SolrDocumentList searchResult = searchDAO.findByFulltext(downloadRequestDTO);
+        long resultCount = searchResult.getNumFound();
+
+        if (resultCount > synchronousDownloadLimit) {
+            response.sendError(
+                    HttpServletResponse.SC_BAD_REQUEST,
+                    "Requested too many records (" + resultCount
+                            + "). The maximum is (" + synchronousDownloadLimit + ")");
+            return false;
+        }
+
+        return true;
     }
 
     private Double distInMetres(Double lat1, Double lon1, Double lat2, Double lon2) {
