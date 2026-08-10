@@ -372,7 +372,7 @@ public class ProcessDownload implements ProcessInterface {
         String value;
 
         if ((publicResolution == null || publicResolution == 0)
-                && (StringUtils.isEmpty(sensitive) || "null".equals(sensitive))) {
+                && (StringUtils.isEmpty(sensitive) || "null".equals(sensitive) || "alreadyGeneralised".equals(sensitive))) {
             value = "There is no higher resolution location information available via the NBN Atlas.";
         } else if (Arrays.stream(fullResolutionAccessIndicatorFields)
                 .map(tuple::get)
