@@ -125,14 +125,30 @@ public class AuthServiceImpl implements AuthService {
                 // invalid email
                 logger.info("Email only download request failed - invalid email " + downloadRequestDTO.getEmail());
             }
-        } else if (!emailOnlyEnabled && downloadRequestDTO.getEmail() != null) {
-            // 4) Continue with this unvalidated email
-            return Optional.of(new AlaUnvalidatedProfile(downloadRequestDTO.getEmail()));
+        } else if (!emailOnlyEnabled && StringUtils.isNotBlank(downloadRequestDTO.getEmail())) {
+            if(isValidEmail(downloadRequestDTO.getEmail())) {
+                // 4) Continue with this unvalidated email
+                return Optional.of(new AlaUnvalidatedProfile(downloadRequestDTO.getEmail()));
+            } else {
+                logger.info("Email only download request failed - invalid email format " + downloadRequestDTO.getEmail());
+            }
         }
 
         return Optional.empty();
     }
 
+    private static boolean isValidEmail(String email) {
+        if (StringUtils.isBlank(email)) {
+            return false;
+        }
+
+        try {
+            new InternetAddress(email).validate();
+            return true;
+        } catch (AddressException e) {
+            return false;
+        }
+    }
 
     /**
      * Authentication for download users has 3 routes:
